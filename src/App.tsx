@@ -5943,8 +5943,8 @@ const generateInviteCode = () =>
 // CLIENT SUPABASE — initialisation robuste
 // ============================================================
 
-const SUPABASE_URL  = "https://wdctmgcfinspgwvkwaii.supabase.co";
-const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkY3RtZ2NmaW5zcGd3dmt3YWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxOTUyNTcsImV4cCI6MjA5Nzc3MTI1N30._38LzpOx59YtmZudZ7ly7oSwJ83Uh9sNfLirqdef_t0";
+const SUPABASE_URL  = (import.meta.env.VITE_SUPABASE_URL || "https://wdctmgcfinspgwvkwaii.supabase.co") as string;
+const SUPABASE_ANON = (import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkY3RtZ2NmaW5zcGd3dmt3YWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxOTUyNTcsImV4cCI6MjA5Nzc3MTI1N30._38LzpOx59YtmZudZ7ly7oSwJ83Uh9sNfLirqdef_t0") as string;
 
 let _supabase: any = null;
 
@@ -6005,12 +6005,45 @@ const profileToAppUser = (session: any, profile: any): AppUser => ({
 const fetchProfile = async (userId: string) => {
   const sb = await getSupabase();
   if (!sb) return null;
-  const { data } = await sb
-    .from("profiles")
-    .select("*")
-    .eq("profile_id", userId)
-    .single();
-  return data;
+  try {
+    const { data, error } = await sb
+      .from("profiles")
+      .select("*")
+      .eq("profile_id", userId)
+      .single();
+    if (error) return null;
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+// Crée ou récupère un profil Supabase si la table est accessible.
+const ensureProfile = async (sb: any, userId: string, fallbackName: string, fallbackEmail: string) => {
+  const existing = await fetchProfile(userId);
+  if (existing) return existing;
+
+  try {
+    const payload = {
+      profile_id: userId,
+      name: fallbackName || fallbackEmail?.split("@")[0] || "",
+      active_family_id: null,
+      consent_general: false,
+      consent_sensitive: false,
+      consent_date: null,
+    };
+
+    const { data, error } = await sb
+      .from("profiles")
+      .upsert(payload, { onConflict: "profile_id" })
+      .select("*")
+      .single();
+
+    if (error) return null;
+    return data;
+  } catch {
+    return null;
+  }
 };
 
 const AuthService = (() => {
@@ -6026,31 +6059,48 @@ const AuthService = (() => {
     if (!sb || _unsubSupabase) return;
     _listenerInitialized = true;
     const { data: { subscription } } = sb.auth.onAuthStateChange(
-      async (event: string, session: any) => {
+      async (_event: string, session: any) => {
         if (!session) { notify(null); return; }
-        const profile = await fetchProfile(session.user.id);
-        notify(profileToAppUser(session, profile));
+        try {
+          const profile = await ensureProfile(sb, session.user.id, session.user.user_metadata?.name || session.user.email?.split("@")[0] || "", session.user.email || "");
+          notify(profileToAppUser(session, profile));
+        } catch {
+          notify(profileToAppUser(session, null));
+        }
       }
     );
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) {
+        const profile = await ensureProfile(sb, session.user.id, session.user.user_metadata?.name || session.user.email?.split("@")[0] || "", session.user.email || "");
+        notify(profileToAppUser(session, profile));
+      }
+    } catch {
+      // ignore and rely on the listener
+    }
     _unsubSupabase = () => subscription.unsubscribe();
   };
 
   return {
     // ── Connexion ──────────────────────────────────────────
     signIn: async (email: string, password: string): Promise<AuthResult> => {
-      // Compte démo — reste en localStorage
-      if (email.toLowerCase() === DEMO_USER.email && password === DEMO_PASSWORD) {
-        const user = { ...DEMO_USER };
-        saveToStorage(STORAGE_KEYS.currentUser, user);
-        notify(user);
-        return { user, error: null };
+      const normalizedEmail = (email || "").trim().toLowerCase();
+      const normalizedPassword = (password || "").trim();
+
+      // Compte démo réservé pour la démo locale uniquement.
+      if (normalizedEmail === DEMO_USER.email && normalizedPassword === DEMO_PASSWORD) {
+        const demoUser = { ...DEMO_USER };
+        saveToStorage(STORAGE_KEYS.currentUser, demoUser);
+        notify(demoUser);
+        return { user: demoUser, error: null };
       }
+
       void initSupabaseListener();
       const sb = await getSupabase();
       if (!sb) return { user: null, error: "Client Supabase non initialisé." };
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      const { data, error } = await sb.auth.signInWithPassword({ email: normalizedEmail, password: normalizedPassword });
       if (error) return { user: null, error: error.message };
-      const profile = await fetchProfile(data.user.id);
+      const profile = await ensureProfile(sb, data.user.id, data.user.user_metadata?.name || data.user.email?.split("@")[0] || "", data.user.email || "");
       const user = profileToAppUser(data.session, profile);
       saveToStorage(STORAGE_KEYS.currentUser, user);
       notify(user);
@@ -6084,7 +6134,7 @@ const AuthService = (() => {
         // Supabase a envoyé un email de confirmation
         return { user: null, error: "Un email de confirmation a été envoyé. Vérifiez votre boîte mail." };
       }
-      const profile = await fetchProfile(data.user.id);
+      const profile = await ensureProfile(sb, data.user.id, name, email);
       const user = profileToAppUser(data.session, profile);
       saveToStorage(STORAGE_KEYS.currentUser, user);
       notify(user);
