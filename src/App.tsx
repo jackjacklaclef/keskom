@@ -1655,6 +1655,7 @@ const MobileDrawer = ({ currentView, onNavigate, darkMode, onToggleDark, current
           </button>
         </>
       )}
+      <p className="mp-micro mp-text-faint" title={__BUILD_TIME__} style={{ textAlign: "center", marginTop: "0.5rem", marginBottom: 0 }}>v{__APP_VERSION__}</p>
     </div>
   </>
 );
@@ -1777,6 +1778,7 @@ const Sidebar = ({ currentView, onNavigate, darkMode, onToggleDark, currentUser,
               </button>
             </div>
           )}
+          <p className="mp-micro mp-text-faint" title={__BUILD_TIME__} style={{ textAlign: "center", marginTop: "0.5rem", marginBottom: 0 }}>v{__APP_VERSION__}</p>
         </div>
       </nav>
       {/* Mobile topbar */}
