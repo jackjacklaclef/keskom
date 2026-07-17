@@ -3499,7 +3499,7 @@ const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingredients
         if (r.familyId === activeFamilyId || r.scope === "family") return true;
         return false;
       })
-    : initialRecipes;
+    : globalRecipes;
 
   const familyRecipeIds = new Set(
     recipes.filter((r) => r.createdBy === currentUser?.id || (r.sharedWith || []).includes(activeFamilyId) || r.familyId === activeFamilyId)
@@ -3540,7 +3540,7 @@ const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingredients
         </button>
         <button type="button" onClick={() => setRecipeTab("global")}
           className={`mp-btn mp-btn-sm ${recipeTab === "global" ? "mp-btn-primary" : "mp-btn-secondary"}`}>
-          Base commune ({initialRecipes.length})
+          Base commune ({globalRecipes.length})
         </button>
       </div>
 
@@ -6106,6 +6106,193 @@ const ensureProfile = async (sb: any, userId: string, fallbackName: string, fall
   }
 };
 
+// ============================================================
+// DONNÉES — ingrédients, recettes, repas, courses, semaines types
+// ============================================================
+// Chargées depuis Supabase pour les comptes réels ; le compte démo garde son
+// jeu de données local (aucune ligne ne lui correspond en base).
+
+// ---- Ingrédients (catalogue global, lecture publique) ----
+const fetchIngredients = async (): Promise<any[]> => {
+  const sb = await getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb.from("ingredients").select("id, name, ingredient_categories(short_name)");
+  if (error || !data) return [];
+  return data.map((i: any) => ({ id: String(i.id), name: i.name, category: i.ingredient_categories?.short_name }));
+};
+
+// ---- Catégories de recettes (mapping short_name -> id, mis en cache) ----
+let _recipeCategoryMap: Record<string, number> | null = null;
+const fetchRecipeCategoryMap = async (): Promise<Record<string, number>> => {
+  if (_recipeCategoryMap) return _recipeCategoryMap;
+  const sb = await getSupabase();
+  if (!sb) return {};
+  const { data, error } = await sb.from("recipe_categories").select("id, short_name");
+  if (error || !data) return {};
+  _recipeCategoryMap = Object.fromEntries(data.map((c: any) => [c.short_name, c.id]));
+  return _recipeCategoryMap;
+};
+
+// ---- Catégories d'ingrédients (mapping short_name -> id, mis en cache) ----
+let _ingredientCategoryMap: Record<string, number> | null = null;
+const fetchIngredientCategoryMap = async (): Promise<Record<string, number>> => {
+  if (_ingredientCategoryMap) return _ingredientCategoryMap;
+  const sb = await getSupabase();
+  if (!sb) return {};
+  const { data, error } = await sb.from("ingredient_categories").select("id, short_name");
+  if (error || !data) return {};
+  _ingredientCategoryMap = Object.fromEntries(data.map((c: any) => [c.short_name, c.id]));
+  return _ingredientCategoryMap;
+};
+
+// ---- Recettes (globales + privées + familiales + partagées, filtrées par RLS) ----
+const fetchRecipesForUser = async (): Promise<any[]> => {
+  const sb = await getSupabase();
+  if (!sb) return [];
+  const { data: rows, error } = await sb
+    .from("recipes")
+    .select(`
+      id, name, description, portions, tags, scope, owner_profile_id, family_id, variant_name,
+      recipe_categories(short_name),
+      recipe_ingredients(ingredient_id, quantity_label, order_index, ingredients(name)),
+      recipe_family_shares(family_id)
+    `)
+    .order("name");
+  if (error || !rows) return [];
+
+  const ids = rows.map((r: any) => r.id);
+  const { data: variantRows } = ids.length
+    ? await sb.from("recipe_variants").select("variant_recipe_id, parent_recipe_id, master_recipe_id").in("variant_recipe_id", ids)
+    : { data: [] };
+  const variantById = Object.fromEntries((variantRows || []).map((v: any) => [v.variant_recipe_id, v]));
+
+  return rows.map((r: any) => {
+    const variant = variantById[r.id];
+    const sharedWith = [r.family_id, ...(r.recipe_family_shares || []).map((s: any) => s.family_id)].filter(Boolean).map(String);
+    return {
+      id: String(r.id),
+      name: r.name,
+      description: r.description || "",
+      portions: r.portions,
+      tags: r.tags || [],
+      category: r.recipe_categories?.short_name,
+      scope: r.scope,
+      createdBy: r.owner_profile_id,
+      familyId: r.family_id ? String(r.family_id) : null,
+      sharedWith,
+      parentId: variant ? String(variant.parent_recipe_id) : null,
+      rootId: variant ? String(variant.master_recipe_id) : null,
+      variantName: r.variant_name || null,
+      ingredients: (r.recipe_ingredients || [])
+        .sort((a: any, b: any) => a.order_index - b.order_index)
+        .map((ri: any) => ({ ingredientId: String(ri.ingredient_id), ingredientName: ri.ingredients?.name, quantity: ri.quantity_label })),
+    };
+  });
+};
+
+// Remplace entièrement les recipe_ingredients d'une recette (l'éditeur envoie toujours la liste complète).
+const saveRecipeIngredients = async (sb: any, recipeId: number, ingredients: any[]) => {
+  await sb.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
+  if (ingredients.length === 0) return;
+  const { data: allIngredients } = await sb.from("ingredients").select("id, name");
+  const idByName = Object.fromEntries((allIngredients || []).map((i: any) => [i.name, i.id]));
+  const rows = ingredients
+    .map((ing: any, idx: number) => ({
+      recipe_id: recipeId,
+      ingredient_id: Number(ing.ingredientId) || idByName[ing.ingredientName],
+      quantity_label: ing.quantity,
+      order_index: idx,
+    }))
+    .filter((row) => row.ingredient_id);
+  if (rows.length > 0) await sb.from("recipe_ingredients").insert(rows);
+};
+
+// ---- Repas planifiés (à plat : un élément par créneau date+type) ----
+const fetchMealPlansForFamily = async (familyId: string): Promise<any[]> => {
+  const sb = await getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("meal_plans")
+    .select("id, date, meal_plan_meals(id, meal_type, status, meal_plan_meal_recipes(recipe_id, order_index))")
+    .eq("family_id", familyId);
+  if (error || !data) return [];
+
+  const flat: any[] = [];
+  data.forEach((mp: any) => {
+    (mp.meal_plan_meals || []).forEach((meal: any) => {
+      flat.push({
+        id: String(meal.id),
+        date: mp.date,
+        type: meal.meal_type,
+        status: meal.status,
+        recipeIds: (meal.meal_plan_meal_recipes || [])
+          .sort((a: any, b: any) => a.order_index - b.order_index)
+          .map((r: any) => String(r.recipe_id)),
+        familyId,
+      });
+    });
+  });
+  return flat;
+};
+
+// Crée/à jour le créneau (date, type) d'une famille avec sa liste de recettes.
+const upsertMealSlot = async (
+  sb: any, familyId: string, userId: string,
+  date: string, type: string, recipeIds: string[], status: string
+) => {
+  let { data: mp } = await sb.from("meal_plans").select("id").eq("family_id", familyId).eq("date", date).maybeSingle();
+  if (!mp) {
+    const { data: newMp, error } = await sb.from("meal_plans").insert({ family_id: familyId, date, created_by: userId }).select("id").single();
+    if (error) throw new Error(error.message);
+    mp = newMp;
+  }
+
+  let { data: meal } = await sb.from("meal_plan_meals").select("id").eq("meal_plan_id", mp.id).eq("meal_type", type).maybeSingle();
+  if (!meal) {
+    const { data: newMeal, error } = await sb
+      .from("meal_plan_meals").insert({ meal_plan_id: mp.id, meal_type: type, status, updated_by: userId }).select("id").single();
+    if (error) throw new Error(error.message);
+    meal = newMeal;
+  } else {
+    await sb.from("meal_plan_meals").update({ status, updated_by: userId }).eq("id", meal.id);
+  }
+
+  await sb.from("meal_plan_meal_recipes").delete().eq("meal_plan_meal_id", meal.id);
+  if (recipeIds.length > 0) {
+    await sb.from("meal_plan_meal_recipes").insert(
+      recipeIds.map((rid, idx) => ({ meal_plan_meal_id: meal.id, recipe_id: Number(rid), order_index: idx }))
+    );
+  }
+  return meal.id;
+};
+
+// ---- Liste de courses (par famille) ----
+const fetchShoppingListForFamily = async (familyId: string): Promise<any[]> => {
+  const sb = await getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb.from("shopping_list_items").select("*").eq("family_id", familyId).order("created_at");
+  if (error || !data) return [];
+  return data.map((i: any) => ({ id: String(i.id), name: i.name, quantity: i.quantity, completed: i.completed, familyId }));
+};
+
+// ---- Semaines types (par famille ou par utilisateur) ----
+const fetchWeekTemplatesForFamily = async (userId: string, familyId: string | null): Promise<any[]> => {
+  const sb = await getSupabase();
+  if (!sb) return [];
+  const orParts = [`profile_id.eq.${userId}`];
+  if (familyId) orParts.push(`family_id.eq.${familyId}`);
+  const { data, error } = await sb.from("week_templates").select("*").or(orParts.join(","));
+  if (error || !data) return [];
+  return data.map((t: any) => ({
+    id: String(t.id),
+    name: t.name,
+    scope: t.scope,
+    familyId: t.family_id ? String(t.family_id) : undefined,
+    userId: t.profile_id ? String(t.profile_id) : undefined,
+    slots: t.slots || [],
+  }));
+};
+
 // Charge toutes les familles dont le profil est membre (public.families + public.family_members).
 // Un profil peut appartenir à plusieurs familles : l'appartenance vit uniquement dans
 // family_members, pas dans profiles.family_id (qui reste toujours null).
@@ -6365,11 +6552,14 @@ const App = () => {
     const stored = loadFromStorage(STORAGE_KEYS.families, null);
     return stored || [DEMO_FAMILY];
   });
-  const [recipes, setRecipes] = useState(() => loadFromStorage(STORAGE_KEYS.recipes, initialRecipes));
-  const [mealPlans, setMealPlans] = useState(() => loadFromStorage(STORAGE_KEYS.mealPlans, initialMealPlans));
-  const [shoppingList, setShoppingList] = useState(() => loadFromStorage(STORAGE_KEYS.shoppingList, initialShoppingList));
-  const [ingredients, setIngredients] = useState(() => loadFromStorage(STORAGE_KEYS.ingredients, initialIngredients));
-  const [weekTemplates, setWeekTemplates] = useState(() => loadFromStorage(STORAGE_KEYS.weekTemplates, []));
+  // Comptes réels : données chargées depuis Supabase via useEffect ci-dessous.
+  // Compte démo : jeu de données local, comme avant.
+  const isDemo = currentUser?.id === "demo";
+  const [recipes, setRecipes] = useState<any[]>(() => isDemo ? initialRecipes : []);
+  const [mealPlans, setMealPlans] = useState<any[]>(() => isDemo ? initialMealPlans : []);
+  const [shoppingList, setShoppingList] = useState<any[]>(() => isDemo ? initialShoppingList : []);
+  const [ingredients, setIngredients] = useState<any[]>(() => isDemo ? initialIngredients : []);
+  const [weekTemplates, setWeekTemplates] = useState<any[]>(() => []);
   const [showFab, setShowFab] = useState(false);
 
   // Familles dont l'utilisateur est membre uniquement
@@ -6419,11 +6609,12 @@ const App = () => {
 
   const { toast, showToast } = useToast();
 
-  useEffect(() => saveToStorage(STORAGE_KEYS.recipes, recipes), [recipes]);
-  useEffect(() => saveToStorage(STORAGE_KEYS.mealPlans, mealPlans), [mealPlans]);
-  useEffect(() => saveToStorage(STORAGE_KEYS.shoppingList, shoppingList), [shoppingList]);
-  useEffect(() => saveToStorage(STORAGE_KEYS.ingredients, ingredients), [ingredients]);
-  useEffect(() => saveToStorage(STORAGE_KEYS.weekTemplates, weekTemplates), [weekTemplates]);
+  // Compte démo uniquement : ces données restent locales, donc persistées en localStorage.
+  useEffect(() => { if (isDemo) saveToStorage(STORAGE_KEYS.recipes, recipes); }, [recipes, isDemo]);
+  useEffect(() => { if (isDemo) saveToStorage(STORAGE_KEYS.mealPlans, mealPlans); }, [mealPlans, isDemo]);
+  useEffect(() => { if (isDemo) saveToStorage(STORAGE_KEYS.shoppingList, shoppingList); }, [shoppingList, isDemo]);
+  useEffect(() => { if (isDemo) saveToStorage(STORAGE_KEYS.ingredients, ingredients); }, [ingredients, isDemo]);
+  useEffect(() => { if (isDemo) saveToStorage(STORAGE_KEYS.weekTemplates, weekTemplates); }, [weekTemplates, isDemo]);
   useEffect(() => saveToStorage(STORAGE_KEYS.darkMode, darkMode), [darkMode]);
   // Note: currentUser est persisté par AuthService, pas ici
   useEffect(() => saveToStorage(STORAGE_KEYS.families, families), [families]);
@@ -6441,6 +6632,40 @@ const App = () => {
     })();
     return () => { cancelled = true; };
   }, [currentUser?.id]);
+
+  // ── Chargement des ingrédients (catalogue global, comptes non-démo) ──
+  useEffect(() => {
+    if (!currentUser || isDemo) return;
+    let cancelled = false;
+    (async () => { const loaded = await fetchIngredients(); if (!cancelled) setIngredients(loaded); })();
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
+
+  // ── Chargement des recettes visibles par l'utilisateur (comptes non-démo) ──
+  useEffect(() => {
+    if (!currentUser || isDemo) return;
+    let cancelled = false;
+    (async () => { const loaded = await fetchRecipesForUser(); if (!cancelled) setRecipes(loaded); })();
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
+
+  // ── Chargement des repas / courses / semaines types de la famille active (comptes non-démo) ──
+  useEffect(() => {
+    if (!currentUser || isDemo || !activeFamily?.id) return;
+    let cancelled = false;
+    (async () => {
+      const [meals, shopping, templates] = await Promise.all([
+        fetchMealPlansForFamily(activeFamily.id),
+        fetchShoppingListForFamily(activeFamily.id),
+        fetchWeekTemplatesForFamily(currentUser.id, activeFamily.id),
+      ]);
+      if (cancelled) return;
+      setMealPlans(meals);
+      setShoppingList(shopping);
+      setWeekTemplates(templates);
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser?.id, isDemo, activeFamily?.id]);
 
   // ── Auth — délègue à AuthService (swappable Supabase) ──
   const handleLogin = async (email: string, password: string) => {
@@ -6633,39 +6858,90 @@ const App = () => {
   };
 
   // ---- Recettes ----
-  const handleAddRecipe = (recipe) =>
-    setRecipes((prev) => [...prev, {
-      ...recipe,
-      id: recipe.id || Date.now().toString(),
-      createdBy: currentUser?.id,
-      scope: "shared",
-      sharedWith: activeFamily ? [activeFamily.id] : [],
-      parentId: recipe.parentId || null,
-      rootId: recipe.rootId || null,
-      variantName: recipe.variantName || null,
-    }]);
-
-  const handleEditRecipe = (updated) =>
-    setRecipes((prev) => prev.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
-
-  const handleDeleteRecipe = (id) => {
-    setRecipes((prev) => prev.filter((r) => r.id !== id));
-    setMealPlans((prev) => prev.map((mp) => ({ ...mp, recipeIds: (mp.recipeIds || []).filter((rid) => rid !== id) })));
+  const handleAddRecipe = async (recipe) => {
+    if (isDemo) {
+      setRecipes((prev) => [...prev, {
+        ...recipe, id: recipe.id || Date.now().toString(), createdBy: currentUser?.id,
+        scope: "shared", sharedWith: activeFamily ? [activeFamily.id] : [],
+        parentId: recipe.parentId || null, rootId: recipe.rootId || null, variantName: recipe.variantName || null,
+      }]);
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const categoryMap = await fetchRecipeCategoryMap();
+      const { data: newRow, error } = await sb.from("recipes").insert({
+        name: recipe.name, description: recipe.description || null, portions: recipe.portions || 4, tags: recipe.tags || [],
+        scope: activeFamily ? "family" : "private", owner_profile_id: currentUser.id, family_id: activeFamily?.id || null,
+        recipe_category_id: categoryMap[recipe.category] || null, created_by: currentUser.id, variant_name: recipe.variantName || null,
+      }).select("id").single();
+      if (error) throw error;
+      await saveRecipeIngredients(sb, newRow.id, recipe.ingredients || []);
+      if (recipe.parentId) {
+        await sb.from("recipe_variants").insert({
+          variant_recipe_id: newRow.id, parent_recipe_id: Number(recipe.parentId),
+          master_recipe_id: Number(recipe.rootId || recipe.parentId), created_by: currentUser.id,
+        });
+      }
+      setRecipes(await fetchRecipesForUser());
+    } catch { showToast("Erreur lors de l'enregistrement de la recette", "clay"); }
   };
 
-  const handleImportRecipe = (recipe) => {
-    const copy = {
-      ...recipe,
-      id: Date.now().toString(),
-      createdBy: currentUser?.id,
-      scope: "shared",
-      sharedWith: activeFamily ? [activeFamily.id] : [],
-      parentId: null,
-      rootId: null,
-      variantName: null,
-    };
-    setRecipes((prev) => [...prev, copy]);
-    showToast(`« ${recipe.name} » ajoutée à ${activeFamily?.name}`, "sage");
+  const handleEditRecipe = async (updated) => {
+    if (isDemo) {
+      setRecipes((prev) => prev.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const categoryMap = await fetchRecipeCategoryMap();
+      const { error } = await sb.from("recipes").update({
+        name: updated.name, description: updated.description || null, portions: updated.portions || 4,
+        tags: updated.tags || [], recipe_category_id: categoryMap[updated.category] || null, variant_name: updated.variantName || null,
+      }).eq("id", Number(updated.id));
+      if (error) throw error;
+      await saveRecipeIngredients(sb, Number(updated.id), updated.ingredients || []);
+      setRecipes(await fetchRecipesForUser());
+    } catch { showToast("Erreur lors de la modification de la recette", "clay"); }
+  };
+
+  const handleDeleteRecipe = async (id) => {
+    if (isDemo) {
+      setRecipes((prev) => prev.filter((r) => r.id !== id));
+      setMealPlans((prev) => prev.map((mp) => ({ ...mp, recipeIds: (mp.recipeIds || []).filter((rid) => rid !== id) })));
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from("recipes").delete().eq("id", Number(id));
+      if (error) throw error;
+      setRecipes((prev) => prev.filter((r) => r.id !== id));
+      if (activeFamily?.id) setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
+    } catch { showToast("Erreur lors de la suppression de la recette", "clay"); }
+  };
+
+  const handleImportRecipe = async (recipe) => {
+    if (isDemo) {
+      setRecipes((prev) => [...prev, {
+        ...recipe, id: Date.now().toString(), createdBy: currentUser?.id, scope: "shared",
+        sharedWith: activeFamily ? [activeFamily.id] : [], parentId: null, rootId: null, variantName: null,
+      }]);
+      showToast(`« ${recipe.name} » ajoutée à ${activeFamily?.name}`, "sage");
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const categoryMap = await fetchRecipeCategoryMap();
+      const { data: newRow, error } = await sb.from("recipes").insert({
+        name: recipe.name, description: recipe.description || null, portions: recipe.portions || 4, tags: recipe.tags || [],
+        scope: activeFamily ? "family" : "private", owner_profile_id: currentUser.id, family_id: activeFamily?.id || null,
+        recipe_category_id: categoryMap[recipe.category] || null, created_by: currentUser.id,
+      }).select("id").single();
+      if (error) throw error;
+      await saveRecipeIngredients(sb, newRow.id, recipe.ingredients || []);
+      setRecipes(await fetchRecipesForUser());
+      showToast(`« ${recipe.name} » ajoutée à ${activeFamily?.name}`, "sage");
+    } catch { showToast("Erreur lors de l'import de la recette", "clay"); }
   };
 
   const handleCreateVariant = (originalRecipe) => {
@@ -6682,39 +6958,109 @@ const App = () => {
     };
   };
 
-  const handleShareRecipe = (recipeId, familyId) => {
-    setRecipes((prev) => prev.map((r) => {
-      if (r.id !== recipeId) return r;
-      const already = (r.sharedWith || []).includes(familyId);
-      return {
-        ...r,
-        scope: already ? (r.sharedWith.length <= 1 ? "private" : "shared") : "shared",
-        sharedWith: already
-          ? (r.sharedWith || []).filter((id) => id !== familyId)
-          : [...(r.sharedWith || []), familyId],
-      };
-    }));
+  const handleShareRecipe = async (recipeId, familyId) => {
+    if (isDemo) {
+      setRecipes((prev) => prev.map((r) => {
+        if (r.id !== recipeId) return r;
+        const already = (r.sharedWith || []).includes(familyId);
+        return {
+          ...r,
+          scope: already ? (r.sharedWith.length <= 1 ? "private" : "shared") : "shared",
+          sharedWith: already ? (r.sharedWith || []).filter((id) => id !== familyId) : [...(r.sharedWith || []), familyId],
+        };
+      }));
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const { data: existing } = await sb.from("recipe_family_shares").select("recipe_id").eq("recipe_id", Number(recipeId)).eq("family_id", familyId).maybeSingle();
+      if (existing) {
+        await sb.from("recipe_family_shares").delete().eq("recipe_id", Number(recipeId)).eq("family_id", familyId);
+      } else {
+        await sb.from("recipe_family_shares").insert({ recipe_id: Number(recipeId), family_id: familyId });
+      }
+      setRecipes(await fetchRecipesForUser());
+    } catch { showToast("Erreur lors du partage de la recette", "clay"); }
   };
 
   // ---- Repas ----
-  const handleAddMeal = (mealData) => setMealPlans((prev) => [...prev, {
-    id: Date.now().toString(), date: mealData?.date || todayStr(),
-    recipeIds: mealData?.recipeIds || [], type: mealData?.type || "lunch",
-    status: mealData?.status || "normal",
-    familyId: activeFamily?.id,
-  }]);
-  const handleUpdateMeal = (mealId, recipeIds, status = "normal") =>
-    setMealPlans((prev) => prev.map((mp) => mp.id === mealId ? { ...mp, recipeIds, status } : mp));
+  const handleAddMeal = async (mealData) => {
+    const date = mealData?.date || todayStr();
+    const type = mealData?.type || "lunch";
+    const recipeIds = mealData?.recipeIds || [];
+    const status = mealData?.status || "normal";
+    if (isDemo) {
+      setMealPlans((prev) => [...prev, { id: Date.now().toString(), date, recipeIds, type, status, familyId: activeFamily?.id }]);
+      return;
+    }
+    if (!activeFamily?.id) return;
+    try {
+      const sb = await getSupabase();
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, date, type, recipeIds, status);
+      setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
+    } catch { showToast("Erreur lors de la planification du repas", "clay"); }
+  };
+
+  const handleUpdateMeal = async (mealId, recipeIds, status = "normal") => {
+    if (isDemo) {
+      setMealPlans((prev) => prev.map((mp) => mp.id === mealId ? { ...mp, recipeIds, status } : mp));
+      return;
+    }
+    const existing = mealPlans.find((mp) => mp.id === mealId);
+    if (!existing || !activeFamily?.id) return;
+    try {
+      const sb = await getSupabase();
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, existing.date, existing.type, recipeIds, status);
+      setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
+    } catch { showToast("Erreur lors de la mise à jour du repas", "clay"); }
+  };
 
   // ---- Courses ----
-  const handleAddShoppingItem = (item) =>
-    setShoppingList((prev) => [...prev, { id: Date.now().toString(), name: item.name, quantity: item.quantity, completed: false, familyId: activeFamily?.id }]);
-  const handleToggleShoppingItem = (id) =>
-    setShoppingList((prev) => prev.map((item) => item.id === id ? { ...item, completed: !item.completed } : item));
-  const handleDeleteShoppingItem = (id) =>
-    setShoppingList((prev) => prev.filter((item) => item.id !== id));
+  const handleAddShoppingItem = async (item) => {
+    if (isDemo) {
+      setShoppingList((prev) => [...prev, { id: Date.now().toString(), name: item.name, quantity: item.quantity, completed: false, familyId: activeFamily?.id }]);
+      return;
+    }
+    if (!activeFamily?.id) return;
+    try {
+      const sb = await getSupabase();
+      const { data, error } = await sb.from("shopping_list_items")
+        .insert({ family_id: activeFamily.id, name: item.name, quantity: item.quantity, created_by: currentUser.id })
+        .select("*").single();
+      if (error) throw error;
+      setShoppingList((prev) => [...prev, { id: String(data.id), name: data.name, quantity: data.quantity, completed: data.completed, familyId: activeFamily.id }]);
+    } catch { showToast("Erreur lors de l'ajout à la liste de courses", "clay"); }
+  };
 
-  const handleGenerateShoppingList = (from, to) => {
+  const handleToggleShoppingItem = async (id) => {
+    if (isDemo) {
+      setShoppingList((prev) => prev.map((item) => item.id === id ? { ...item, completed: !item.completed } : item));
+      return;
+    }
+    const current = shoppingList.find((i) => i.id === id);
+    if (!current) return;
+    setShoppingList((prev) => prev.map((item) => item.id === id ? { ...item, completed: !item.completed } : item));
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from("shopping_list_items").update({ completed: !current.completed }).eq("id", Number(id));
+      if (error) throw error;
+    } catch {
+      showToast("Erreur lors de la mise à jour", "clay");
+      setShoppingList((prev) => prev.map((item) => item.id === id ? { ...item, completed: current.completed } : item));
+    }
+  };
+
+  const handleDeleteShoppingItem = async (id) => {
+    if (isDemo) { setShoppingList((prev) => prev.filter((item) => item.id !== id)); return; }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from("shopping_list_items").delete().eq("id", Number(id));
+      if (error) throw error;
+      setShoppingList((prev) => prev.filter((item) => item.id !== id));
+    } catch { showToast("Erreur lors de la suppression", "clay"); }
+  };
+
+  const handleGenerateShoppingList = async (from, to) => {
     const startStr = from || todayStr();
     const endDate = new Date((to || startStr) + "T12:00:00");
     endDate.setDate(endDate.getDate() + 1);
@@ -6740,75 +7086,190 @@ const App = () => {
         });
       });
     });
-    let addedCount = 0;
-    setShoppingList((prev) => {
-      const existingNames = new Set(prev.map((i) => i.name.toLowerCase()));
-      const additions = []; aggregated.forEach((quantity, name) => { if (existingNames.has(name.toLowerCase())) return; additions.push({ id: `${Date.now()}-${name}`, name, quantity, completed: false, familyId: activeFamily?.id }); });
-      addedCount = additions.length; return [...prev, ...additions];
-    });
-    setTimeout(() => { addedCount === 0 ? showToast("Tous les ingrédients sont déjà dans la liste","sage") : showToast(`${addedCount} article${addedCount>1?"s":""} ajouté${addedCount>1?"s":""} depuis ${recipeCount} recette${recipeCount>1?"s":""}`, "sage"); }, 0);
+    if (isDemo) {
+      let addedCount = 0;
+      setShoppingList((prev) => {
+        const existingNames = new Set(prev.map((i) => i.name.toLowerCase()));
+        const additions = []; aggregated.forEach((quantity, name) => { if (existingNames.has(name.toLowerCase())) return; additions.push({ id: `${Date.now()}-${name}`, name, quantity, completed: false, familyId: activeFamily?.id }); });
+        addedCount = additions.length; return [...prev, ...additions];
+      });
+      setTimeout(() => { addedCount === 0 ? showToast("Tous les ingrédients sont déjà dans la liste","sage") : showToast(`${addedCount} article${addedCount>1?"s":""} ajouté${addedCount>1?"s":""} depuis ${recipeCount} recette${recipeCount>1?"s":""}`, "sage"); }, 0);
+      return;
+    }
+    if (!activeFamily?.id) return;
+    const existingNames = new Set(shoppingList.map((i) => i.name.toLowerCase()));
+    const additions = [];
+    aggregated.forEach((quantity, name) => { if (!existingNames.has(name.toLowerCase())) additions.push({ family_id: activeFamily.id, name, quantity, created_by: currentUser.id }); });
+    if (additions.length === 0) { showToast("Tous les ingrédients sont déjà dans la liste", "sage"); return; }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from("shopping_list_items").insert(additions);
+      if (error) throw error;
+      setShoppingList(await fetchShoppingListForFamily(activeFamily.id));
+      showToast(`${additions.length} article${additions.length>1?"s":""} ajouté${additions.length>1?"s":""} depuis ${recipeCount} recette${recipeCount>1?"s":""}`, "sage");
+    } catch { showToast("Erreur lors de la génération de la liste", "clay"); }
   };
 
   // ---- Ingrédients ----
-  const handleAddIngredient = (ing) => setIngredients((prev) => [...prev, ing]);
-  const handleDeleteIngredient = (id) => {
+  const handleAddIngredient = async (ing) => {
+    if (isDemo) { setIngredients((prev) => [...prev, ing]); return; }
+    try {
+      const sb = await getSupabase();
+      const categoryMap = await fetchIngredientCategoryMap();
+      const { data, error } = await sb.from("ingredients").insert({ name: ing.name, ingredient_category_id: categoryMap[ing.category] }).select("id").single();
+      if (error) throw error;
+      setIngredients((prev) => [...prev, { id: String(data.id), name: ing.name, category: ing.category }]);
+    } catch { showToast("Erreur lors de l'ajout de l'ingrédient", "clay"); }
+  };
+
+  const handleDeleteIngredient = async (id) => {
     if (familyRecipes.some((r) => r.ingredients?.some((i) => i.ingredientId === id))) {
       alert("Cet ingrédient est utilisé dans une recette."); return;
     }
-    setIngredients((prev) => prev.filter((i) => i.id !== id));
+    if (isDemo) { setIngredients((prev) => prev.filter((i) => i.id !== id)); return; }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from("ingredients").delete().eq("id", Number(id));
+      if (error) throw error;
+      setIngredients((prev) => prev.filter((i) => i.id !== id));
+    } catch { alert("Cet ingrédient est utilisé dans une recette."); }
   };
 
   // ---- Semaines types ----
-  const handleSaveTemplate = (tpl) => setWeekTemplates((prev) => {
-    const base = { ...tpl, familyId: tpl.scope === "family" ? activeFamily?.id : undefined, userId: tpl.scope === "user" ? currentUser?.id : undefined };
-    const idx = prev.findIndex((t) => t.id === base.id);
-    return idx >= 0 ? prev.map((t) => t.id === base.id ? base : t) : [...prev, base];
-  });
-  const handleDeleteTemplate = (id) => setWeekTemplates((prev) => prev.filter((t) => t.id !== id));
-  const handleApplyTemplate = (template, weekStart, mode) => {
-    const monday = getMondayOf(new Date(weekStart + "T12:00:00"));
-    setMealPlans((prev) => {
-      let base = prev;
-      if (mode === "overwrite") {
-        const affected = new Set(template.slots.map((s) => dateOfSlot(monday, s.day)));
-        base = prev.filter((mp) => !affected.has(mp.date) || !template.slots.some((s) => s.type === mp.type && dateOfSlot(monday, s.day) === mp.date));
+  const handleSaveTemplate = async (tpl) => {
+    if (isDemo) {
+      setWeekTemplates((prev) => {
+        const base = { ...tpl, familyId: tpl.scope === "family" ? activeFamily?.id : undefined, userId: tpl.scope === "user" ? currentUser?.id : undefined };
+        const idx = prev.findIndex((t) => t.id === base.id);
+        return idx >= 0 ? prev.map((t) => t.id === base.id ? base : t) : [...prev, base];
+      });
+      return;
+    }
+    const isExisting = weekTemplates.some((t) => t.id === tpl.id);
+    try {
+      const sb = await getSupabase();
+      const payload = {
+        name: tpl.name, scope: tpl.scope,
+        family_id: tpl.scope === "family" ? activeFamily?.id : null,
+        profile_id: tpl.scope === "user" ? currentUser.id : null,
+        slots: tpl.slots, created_by: currentUser.id,
+      };
+      if (isExisting) {
+        const { error } = await sb.from("week_templates").update(payload).eq("id", Number(tpl.id));
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from("week_templates").insert(payload);
+        if (error) throw error;
       }
-      const additions = template.slots.filter((slot) => {
-        if (mode === "merge") { const date = dateOfSlot(monday, slot.day); return !base.some((mp) => mp.date === date && mp.type === slot.type && (mp.recipeIds||[]).length > 0); }
-        return true;
-      }).map((slot) => ({ id: `tpl-${Date.now()}-${slot.day}-${slot.type}`, date: dateOfSlot(monday, slot.day), type: slot.type, recipeIds: slot.recipeIds, familyId: activeFamily?.id }));
-      return [...base, ...additions];
+      setWeekTemplates(await fetchWeekTemplatesForFamily(currentUser.id, activeFamily?.id || null));
+    } catch { showToast("Erreur lors de l'enregistrement du modèle", "clay"); }
+  };
+
+  const handleDeleteTemplate = async (id) => {
+    if (isDemo) { setWeekTemplates((prev) => prev.filter((t) => t.id !== id)); return; }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from("week_templates").delete().eq("id", Number(id));
+      if (error) throw error;
+      setWeekTemplates((prev) => prev.filter((t) => t.id !== id));
+    } catch { showToast("Erreur lors de la suppression du modèle", "clay"); }
+  };
+
+  const handleApplyTemplate = async (template, weekStart, mode) => {
+    const monday = getMondayOf(new Date(weekStart + "T12:00:00"));
+    const slotsToApply = template.slots.filter((slot) => {
+      if (mode === "merge") {
+        const date = dateOfSlot(monday, slot.day);
+        return !mealPlans.some((mp) => mp.date === date && mp.type === slot.type && (mp.recipeIds || []).length > 0);
+      }
+      return true;
     });
-    showToast(`${template.slots.length} créneau${template.slots.length>1?"x":""} appliqué${template.slots.length>1?"s":""}`, "sage");
+    if (isDemo) {
+      setMealPlans((prev) => {
+        let base = prev;
+        if (mode === "overwrite") {
+          const affected = new Set(template.slots.map((s) => dateOfSlot(monday, s.day)));
+          base = prev.filter((mp) => !affected.has(mp.date) || !template.slots.some((s) => s.type === mp.type && dateOfSlot(monday, s.day) === mp.date));
+        }
+        const additions = slotsToApply.map((slot) => ({ id: `tpl-${Date.now()}-${slot.day}-${slot.type}`, date: dateOfSlot(monday, slot.day), type: slot.type, recipeIds: slot.recipeIds, familyId: activeFamily?.id }));
+        return [...base, ...additions];
+      });
+      showToast(`${slotsToApply.length} créneau${slotsToApply.length>1?"x":""} appliqué${slotsToApply.length>1?"s":""}`, "sage");
+      return;
+    }
+    if (!activeFamily?.id) return;
+    try {
+      const sb = await getSupabase();
+      for (const slot of slotsToApply) {
+        await upsertMealSlot(sb, activeFamily.id, currentUser.id, dateOfSlot(monday, slot.day), slot.type, slot.recipeIds, "normal");
+      }
+      setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
+      showToast(`${slotsToApply.length} créneau${slotsToApply.length>1?"x":""} appliqué${slotsToApply.length>1?"s":""}`, "sage");
+    } catch { showToast("Erreur lors de l'application du modèle", "clay"); }
   };
 
   // ---- Duplication / vidage semaine ----
-  const handleDuplicateWeek = (srcDateStr, targetMondayStr) => {
+  const handleDuplicateWeek = async (srcDateStr, targetMondayStr) => {
     const monday = getMondayOf(new Date(srcDateStr + "T12:00:00"));
     const targetMonday = new Date(targetMondayStr + "T12:00:00");
     const weekMeals = familyMealPlans.filter((mp) => getMondayOf(new Date(mp.date + "T12:00:00")).toISOString().split("T")[0] === monday.toISOString().split("T")[0]);
     if (weekMeals.length === 0) { showToast("Aucun repas à dupliquer", "berry"); return; }
-    const base = Date.now();
-    setMealPlans((prev) => {
-      const additions = weekMeals.map((mp, idx) => {
-        const offset = Math.round((new Date(mp.date + "T12:00:00") - monday) / 86400000);
-        const newDate = new Date(targetMonday); newDate.setDate(targetMonday.getDate() + offset);
-        const newDateStr = newDate.toISOString().split("T")[0];
-        if (prev.some((p) => p.date === newDateStr && p.type === mp.type && (p.recipeIds || []).length > 0)) return null;
-        return { id: `dup-${base}-${idx}`, date: newDateStr, type: mp.type, recipeIds: [...(mp.recipeIds || [])], status: mp.status || "normal", familyId: activeFamily?.id };
-      }).filter(Boolean);
-      return [...prev, ...additions];
+
+    const targets = weekMeals.map((mp) => {
+      const offset = Math.round((new Date(mp.date + "T12:00:00") - monday) / 86400000);
+      const newDate = new Date(targetMonday); newDate.setDate(targetMonday.getDate() + offset);
+      return { newDateStr: newDate.toISOString().split("T")[0], type: mp.type, recipeIds: [...(mp.recipeIds || [])], status: mp.status || "normal" };
     });
-    showToast(`${weekMeals.length} repas dupliqué${weekMeals.length > 1 ? "s" : ""}`, "sage");
+
+    if (isDemo) {
+      const base = Date.now();
+      setMealPlans((prev) => {
+        const additions = targets.map((t, idx) => {
+          if (prev.some((p) => p.date === t.newDateStr && p.type === t.type && (p.recipeIds || []).length > 0)) return null;
+          return { id: `dup-${base}-${idx}`, date: t.newDateStr, type: t.type, recipeIds: t.recipeIds, status: t.status, familyId: activeFamily?.id };
+        }).filter(Boolean);
+        return [...prev, ...additions];
+      });
+      showToast(`${weekMeals.length} repas dupliqué${weekMeals.length > 1 ? "s" : ""}`, "sage");
+      return;
+    }
+
+    if (!activeFamily?.id) return;
+    try {
+      const sb = await getSupabase();
+      for (const t of targets) {
+        if (mealPlans.some((p) => p.date === t.newDateStr && p.type === t.type && (p.recipeIds || []).length > 0)) continue;
+        await upsertMealSlot(sb, activeFamily.id, currentUser.id, t.newDateStr, t.type, t.recipeIds, t.status);
+      }
+      setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
+      showToast(`${weekMeals.length} repas dupliqué${weekMeals.length > 1 ? "s" : ""}`, "sage");
+    } catch { showToast("Erreur lors de la duplication de la semaine", "clay"); }
   };
 
-  const handleClearWeek = (dateStr) => {
-    const mondayStr = getMondayOf(new Date(dateStr + "T12:00:00")).toISOString().split("T")[0];
-    setMealPlans((prev) => {
-      const removed = prev.filter((mp) => getMondayOf(new Date(mp.date + "T12:00:00")).toISOString().split("T")[0] === mondayStr && (mp.familyId === activeFamily?.id || !mp.familyId));
-      showToast(`${removed.length} repas supprimé${removed.length>1?"s":""}`, "berry");
-      return prev.filter((mp) => !(getMondayOf(new Date(mp.date + "T12:00:00")).toISOString().split("T")[0] === mondayStr && (mp.familyId === activeFamily?.id || !mp.familyId)));
-    });
+  const handleClearWeek = async (dateStr) => {
+    const mondayDate = getMondayOf(new Date(dateStr + "T12:00:00"));
+    const mondayStr = mondayDate.toISOString().split("T")[0];
+    const sundayDate = new Date(mondayDate); sundayDate.setDate(mondayDate.getDate() + 6);
+    const sundayStr = sundayDate.toISOString().split("T")[0];
+
+    if (isDemo) {
+      setMealPlans((prev) => {
+        const removed = prev.filter((mp) => getMondayOf(new Date(mp.date + "T12:00:00")).toISOString().split("T")[0] === mondayStr && (mp.familyId === activeFamily?.id || !mp.familyId));
+        showToast(`${removed.length} repas supprimé${removed.length>1?"s":""}`, "berry");
+        return prev.filter((mp) => !(getMondayOf(new Date(mp.date + "T12:00:00")).toISOString().split("T")[0] === mondayStr && (mp.familyId === activeFamily?.id || !mp.familyId)));
+      });
+      return;
+    }
+
+    if (!activeFamily?.id) return;
+    try {
+      const sb = await getSupabase();
+      const removedCount = mealPlans.filter((mp) => mp.date >= mondayStr && mp.date <= sundayStr).length;
+      const { error } = await sb.from("meal_plans").delete().eq("family_id", activeFamily.id).gte("date", mondayStr).lte("date", sundayStr);
+      if (error) throw error;
+      setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
+      showToast(`${removedCount} repas supprimé${removedCount>1?"s":""}`, "berry");
+    } catch { showToast("Erreur lors de la suppression de la semaine", "clay"); }
   };
 
   const handleUpdateUserProfile = (updates: Partial<AppUser>) => {
@@ -6831,7 +7292,7 @@ const App = () => {
 
   const viewProps = {
     calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [] },
-    recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: initialRecipes, ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
+    recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: isDemo ? initialRecipes : recipes.filter((r) => r.scope === "global"), ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
     preferences: { currentUser, ingredients, weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate, onUpdateUserProfile: handleUpdateUserProfile },
     family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember },
