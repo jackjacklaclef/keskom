@@ -6046,6 +6046,48 @@ const ensureProfile = async (sb: any, userId: string, fallbackName: string, fall
   }
 };
 
+// Charge la famille du profil (public.families + public.family_members) au format front-end.
+const fetchFamilyForUser = async (user: AppUser): Promise<any | null> => {
+  const sb = await getSupabase();
+  if (!sb) return null;
+  try {
+    const { data: profile } = await sb.from("profiles").select("family_id").eq("profile_id", user.id).single();
+    if (!profile?.family_id) return null;
+
+    const { data: familyRow, error: familyError } = await sb
+      .from("families").select("*").eq("family_id", profile.family_id).single();
+    if (familyError || !familyRow) return null;
+
+    const { data: memberRows } = await sb
+      .from("family_members").select("*").eq("family_id", profile.family_id);
+
+    const members = (memberRows || []).map((m: any) => ({
+      userId: m.profile_id,
+      userName: m.name,
+      userEmail: m.profile_id === user.id ? user.email : "",
+      role: m.profile_id === familyRow.owner_profile_id ? "admin" : "member",
+    }));
+    // Garantit que l'utilisateur courant apparaît, même sans ligne family_members dédiée.
+    if (!members.some((m) => m.userId === user.id)) {
+      members.push({
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        role: user.id === familyRow.owner_profile_id ? "admin" : "member",
+      });
+    }
+
+    return {
+      id: familyRow.family_id,
+      name: familyRow.name,
+      inviteCode: familyRow.invite_code,
+      members,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const AuthService = (() => {
   const listeners: AuthChangeCallback[] = [];
   const notify = (user: AppUser | null) => listeners.forEach((cb) => cb(user));
@@ -6317,6 +6359,19 @@ const App = () => {
   // Note: currentUser est persisté par AuthService, pas ici
   useEffect(() => saveToStorage(STORAGE_KEYS.families, families), [families]);
 
+  // ── Chargement de la famille réelle depuis Supabase (comptes non-démo) ──
+  useEffect(() => {
+    if (!currentUser || currentUser.id === "demo") return;
+    let cancelled = false;
+    (async () => {
+      const family = await fetchFamilyForUser(currentUser);
+      if (!cancelled && family) {
+        setFamilies((prev) => [...prev.filter((f) => f.id !== family.id), family]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
+
   // ── Auth — délègue à AuthService (swappable Supabase) ──
   const handleLogin = async (email: string, password: string) => {
     const { user, error } = await AuthService.signIn(email, password);
@@ -6341,14 +6396,48 @@ const App = () => {
 
   // ---- Famille ----
   const handleCreateFamily = async (name: string) => {
+    if (currentUser.id === "demo") {
+      const newFamily = {
+        id: Date.now().toString(),
+        name,
+        inviteCode: generateInviteCode(),
+        members: [{ userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
+      };
+      setFamilies((prev: any[]) => [...prev, newFamily]);
+      AuthService.updateProfile(currentUser.id, { activeFamilyId: newFamily.id });
+      showToast(`Famille « ${name} » créée`, "sage");
+      return;
+    }
+
+    const sb = await getSupabase();
+    if (!sb) throw new Error("Connexion à la base de données indisponible.");
+
+    const { data: familyRow, error: familyError } = await sb
+      .from("families")
+      .insert({ owner_profile_id: currentUser.id, name, invite_code: generateInviteCode() })
+      .select("*")
+      .single();
+    if (familyError) throw new Error(familyError.message);
+
+    const { error: memberError } = await sb
+      .from("family_members")
+      .insert({ family_id: familyRow.family_id, profile_id: currentUser.id, name: currentUser.name });
+    if (memberError) throw new Error(memberError.message);
+
+    const { error: profileError } = await sb
+      .from("profiles")
+      .update({ family_id: familyRow.family_id, active_family_id: familyRow.family_id })
+      .eq("profile_id", currentUser.id);
+    if (profileError) throw new Error(profileError.message);
+
     const newFamily = {
-      id: Date.now().toString(),
-      name,
-      inviteCode: generateInviteCode(),
+      id: familyRow.family_id,
+      name: familyRow.name,
+      inviteCode: familyRow.invite_code,
       members: [{ userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
     };
-    setFamilies((prev: any[]) => [...prev, newFamily]);
-    AuthService.updateProfile(currentUser.id, { activeFamilyId: newFamily.id });
+    setFamilies((prev: any[]) => [...prev.filter((f) => f.id !== newFamily.id), newFamily]);
+    setCurrentUser((u: any) => u && { ...u, activeFamilyId: newFamily.id });
     showToast(`Famille « ${name} » créée`, "sage");
   };
 
