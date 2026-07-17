@@ -5939,19 +5939,44 @@ const generateInviteCode = () =>
 // Chargé depuis CDN — pas de npm nécessaire pour le fichier unique
 // À remplacer par import { createClient } from '@supabase/supabase-js' lors du split
 
-declare const supabase: any; // sera initialisé ci-dessous via le script CDN
+// ============================================================
+// CLIENT SUPABASE — initialisation robuste
+// ============================================================
 
 const SUPABASE_URL  = "https://wdctmgcfinspgwvkwaii.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkY3RtZ2NmaW5zcGd3dmt3YWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxOTUyNTcsImV4cCI6MjA5Nzc3MTI1N30._38LzpOx59YtmZudZ7ly7oSwJ83Uh9sNfLirqdef_t0";
 
-// Initialisation du client (fonctionne aussi bien en browser qu'en SSR)
 let _supabase: any = null;
-const getSupabase = () => {
-  if (_supabase) return _supabase;
-  if (typeof window !== "undefined" && (window as any).supabase) {
-    _supabase = (window as any).supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-  }
-  return _supabase;
+
+// Charge le SDK CDN et retourne le client — idempotent
+const getSupabase = (): Promise<any> => {
+  if (_supabase) return Promise.resolve(_supabase);
+  return new Promise((resolve) => {
+    // Si déjà disponible dans window (chargement précédent)
+    if (typeof window !== "undefined" && (window as any).supabase?.createClient) {
+      _supabase = (window as any).supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+      return resolve(_supabase);
+    }
+    // Injecter le script et attendre son chargement
+    const existing = document.getElementById("supabase-cdn");
+    const inject = (el: HTMLScriptElement) => {
+      el.onload = () => {
+        _supabase = (window as any).supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        resolve(_supabase);
+      };
+      el.onerror = () => resolve(null);
+    };
+    if (existing) {
+      // Script déjà dans le DOM mais pas encore chargé — attendre
+      inject(existing as HTMLScriptElement);
+    } else {
+      const script = document.createElement("script");
+      script.id = "supabase-cdn";
+      script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js";
+      document.head.appendChild(script);
+      inject(script);
+    }
+  });
 };
 
 // ============================================================
@@ -5978,7 +6003,7 @@ const profileToAppUser = (session: any, profile: any): AppUser => ({
 
 // Charge le profil depuis public.profiles
 const fetchProfile = async (userId: string) => {
-  const sb = getSupabase();
+  const sb = await getSupabase();
   if (!sb) return null;
   const { data } = await sb
     .from("profiles")
@@ -5994,8 +6019,8 @@ const AuthService = (() => {
 
   // Abonnement interne au changement de session Supabase
   let _unsubSupabase: (() => void) | null = null;
-  const initSupabaseListener = () => {
-    const sb = getSupabase();
+  const initSupabaseListener = async () => {
+    const sb = await getSupabase();
     if (!sb || _unsubSupabase) return;
     const { data: { subscription } } = sb.auth.onAuthStateChange(
       async (event: string, session: any) => {
@@ -6017,7 +6042,7 @@ const AuthService = (() => {
         notify(user);
         return { user, error: null };
       }
-      const sb = getSupabase();
+      const sb = await getSupabase();
       if (!sb) return { user: null, error: "Client Supabase non initialisé." };
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) return { user: null, error: error.message };
@@ -6033,7 +6058,7 @@ const AuthService = (() => {
       password: string,
       consents: { consentGeneral: boolean; consentSensitive: boolean; consentDate: string }
     ): Promise<AuthResult> => {
-      const sb = getSupabase();
+      const sb = await getSupabase();
       if (!sb) return { user: null, error: "Client Supabase non initialisé." };
       const { data, error } = await sb.auth.signUp({
         email,
@@ -6061,7 +6086,7 @@ const AuthService = (() => {
     signOut: async () => {
       // Démo — nettoyage localStorage
       saveToStorage(STORAGE_KEYS.currentUser, null);
-      const sb = getSupabase();
+      const sb = await getSupabase();
       if (sb) await sb.auth.signOut();
       notify(null);
     },
@@ -6098,7 +6123,7 @@ const AuthService = (() => {
         notify({ ...DEMO_USER, ...updates });
         return;
       }
-      const sb = getSupabase();
+      const sb = await getSupabase();
       if (!sb) return;
       // Mapper AppUser → colonnes Supabase
       const dbUpdates: any = {};
@@ -6118,7 +6143,7 @@ const AuthService = (() => {
     // ── Suppression de compte ─────────────────────────────
     deleteAccount: async (userId: string) => {
       saveToStorage(STORAGE_KEYS.currentUser, null);
-      const sb = getSupabase();
+      const sb = await getSupabase();
       if (sb) {
         // Supprimer le profil (cascade RLS)
         await sb.from("profiles").delete().eq("profile_id", userId);
@@ -6129,7 +6154,7 @@ const AuthService = (() => {
 
     // ── Mot de passe oublié ───────────────────────────────
     resetPassword: async (email: string): Promise<{ error: string | null }> => {
-      const sb = getSupabase();
+      const sb = await getSupabase();
       if (!sb) return { error: "Client Supabase non initialisé." };
       const { error } = await sb.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}?reset=true`,
@@ -6153,15 +6178,6 @@ const AuthService = (() => {
 const App = () => {
   const [currentView, setCurrentView] = useState("calendar");
   const [darkMode, setDarkMode] = useState(() => loadFromStorage(STORAGE_KEYS.darkMode, false));
-
-  // ── Charger le SDK Supabase depuis CDN au montage ──────
-  useEffect(() => {
-    if (document.getElementById("supabase-cdn")) return;
-    const script = document.createElement("script");
-    script.id = "supabase-cdn";
-    script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js";
-    document.head.appendChild(script);
-  }, []);
 
   // ── Auth — initialisé depuis AuthService, mis à jour via onAuthChange ──
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => AuthService.getSession());
