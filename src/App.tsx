@@ -5051,7 +5051,7 @@ const UserAvatar = ({ name, size = "md" }) => {
   );
 };
 
-const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, onJoinFamily, onLeaveFamily, onSetActiveFamily, onPromoteMember, onRemoveMember, onRegenerateCode }) => {
+const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, onJoinFamily, onLeaveFamily, onSetActiveFamily, onPromoteMember, onRemoveMember, onRegenerateCode, onAddMemberByEmail, onAddLocalMember }) => {
   const hasNoFamily = families.length === 0;
   const [tab, setTab] = useState("create");
   const [showJoinCreate, setShowJoinCreate] = useState(hasNoFamily);
@@ -5059,6 +5059,11 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [copiedCode, setCopiedCode] = useState(null);
+  const [addTab, setAddTab] = useState("email"); // "email" | "local"
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberName, setMemberName] = useState("");
+  const [addMemberError, setAddMemberError] = useState("");
+  const [addingMember, setAddingMember] = useState(false);
 
   const activeFamily = families.find((f) => f.id === currentUser?.activeFamilyId) || families[0];
   const currentMember = activeFamily?.members.find((m) => m.userId === currentUser?.id);
@@ -5081,6 +5086,24 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
     e?.preventDefault();
     try { await onJoinFamily(inviteCode.trim().toUpperCase()); setShowJoinCreate(false); setInviteCode(""); setError(""); }
     catch (err) { setError(err.message); }
+  };
+
+  const handleAddByEmail = async (e, familyId) => {
+    e?.preventDefault();
+    if (!memberEmail.trim()) return;
+    setAddingMember(true);
+    try { await onAddMemberByEmail(familyId, memberEmail.trim()); setMemberEmail(""); setAddMemberError(""); }
+    catch (err) { setAddMemberError(err.message); }
+    finally { setAddingMember(false); }
+  };
+
+  const handleAddLocal = async (e, familyId) => {
+    e?.preventDefault();
+    if (!memberName.trim()) return;
+    setAddingMember(true);
+    try { await onAddLocalMember(familyId, memberName.trim()); setMemberName(""); setAddMemberError(""); }
+    catch (err) { setAddMemberError(err.message); }
+    finally { setAddingMember(false); }
   };
 
   return (
@@ -5179,12 +5202,47 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
           )}
         </div>
 
+        {/* Ajouter un membre */}
+        {isAdmin && (
+          <div style={{ marginBottom: space.md }}>
+            <span className="mp-label">Ajouter un membre</span>
+            <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.5rem" }}>
+              {[["email", "Par email"], ["local", "Sans compte"]].map(([id, label]) => (
+                <button key={id} type="button" onClick={() => { setAddTab(id); setAddMemberError(""); }}
+                  className={`mp-btn mp-btn-sm ${addTab === id ? "mp-btn-primary" : "mp-btn-secondary"}`}
+                  style={{ flex: 1, justifyContent: "center" }}>{label}</button>
+              ))}
+            </div>
+            {addMemberError && <div className="mp-auth-error" style={{ marginBottom: "0.5rem" }}>{addMemberError}</div>}
+            {addTab === "email" ? (
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <input className="mp-input" style={{ flex: 1 }} type="email" value={memberEmail}
+                  onChange={(e) => setMemberEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && memberEmail.trim() && handleAddByEmail(e, activeFamily.id)}
+                  placeholder="email@exemple.com" />
+                <button type="button" className="mp-btn mp-btn-primary mp-btn-sm"
+                  disabled={!memberEmail.trim() || addingMember} onClick={(e) => handleAddByEmail(e, activeFamily.id)}>Ajouter</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <input className="mp-input" style={{ flex: 1 }} value={memberName}
+                  onChange={(e) => setMemberName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && memberName.trim() && handleAddLocal(e, activeFamily.id)}
+                  placeholder="Prénom" />
+                <button type="button" className="mp-btn mp-btn-primary mp-btn-sm"
+                  disabled={!memberName.trim() || addingMember} onClick={(e) => handleAddLocal(e, activeFamily.id)}>Ajouter</button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Membres */}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
           {activeFamily.members.map((member) => {
             const isSelf = member.userId === currentUser.id;
+            const memberKey = member.memberId || member.userId;
             return (
-              <div key={member.userId} style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", padding: "0.6rem 0", borderBottom: "1px solid var(--line)" }}>
+              <div key={memberKey} style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", padding: "0.6rem 0", borderBottom: "1px solid var(--line)" }}>
                 <UserAvatar name={member.userName} size="sm" />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
@@ -5225,7 +5283,7 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
                         ↑ Admin
                       </button>
                     )}
-                    <button type="button" className="mp-btn mp-btn-danger mp-btn-icon" onClick={() => onRemoveMember(activeFamily.id, member.userId)} aria-label="Retirer">
+                    <button type="button" className="mp-btn mp-btn-danger mp-btn-icon" onClick={() => onRemoveMember(activeFamily.id, memberKey)} aria-label="Retirer">
                       <Icon name="trash" size={13} />
                     </button>
                   </div>
@@ -5914,7 +5972,7 @@ const DEMO_FAMILY = {
   id: "demo-family",
   name: "Famille Demo",
   inviteCode: "DEMO01",
-  members: [{ userId: "demo", userName: "Famille Demo", userEmail: "demo@carnet.app", role: "admin" }],
+  members: [{ memberId: "demo", userId: "demo", userName: "Famille Demo", userEmail: "demo@carnet.app", role: "admin" }],
 };
 
 const generateInviteCode = () =>
@@ -6071,6 +6129,7 @@ const fetchFamiliesForUser = async (user: AppUser): Promise<any[]> => {
       const members = (allMemberRows || [])
         .filter((m: any) => m.family_id === familyRow.family_id)
         .map((m: any) => ({
+          memberId: m.member_id,
           userId: m.profile_id,
           userName: m.name,
           userEmail: m.profile_id === user.id ? user.email : "",
@@ -6079,6 +6138,7 @@ const fetchFamiliesForUser = async (user: AppUser): Promise<any[]> => {
       // Garantit que l'utilisateur courant apparaît, même sans ligne family_members dédiée.
       if (!members.some((m) => m.userId === user.id)) {
         members.push({
+          memberId: null,
           userId: user.id,
           userName: user.name,
           userEmail: user.email,
@@ -6411,7 +6471,7 @@ const App = () => {
         id: Date.now().toString(),
         name,
         inviteCode: generateInviteCode(),
-        members: [{ userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
+        members: [{ memberId: currentUser.id, userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
       };
       setFamilies((prev: any[]) => [...prev, newFamily]);
       AuthService.updateProfile(currentUser.id, { activeFamilyId: newFamily.id });
@@ -6429,9 +6489,11 @@ const App = () => {
       .single();
     if (familyError) throw new Error(familyError.message);
 
-    const { error: memberError } = await sb
+    const { data: memberRow, error: memberError } = await sb
       .from("family_members")
-      .insert({ family_id: familyRow.family_id, profile_id: currentUser.id, name: currentUser.name });
+      .insert({ family_id: familyRow.family_id, profile_id: currentUser.id, name: currentUser.name })
+      .select("*")
+      .single();
     if (memberError) throw new Error(memberError.message);
 
     const { error: profileError } = await sb
@@ -6444,11 +6506,69 @@ const App = () => {
       id: familyRow.family_id,
       name: familyRow.name,
       inviteCode: familyRow.invite_code,
-      members: [{ userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
+      members: [{ memberId: memberRow.member_id, userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
     };
     setFamilies((prev: any[]) => [...prev.filter((f) => f.id !== newFamily.id), newFamily]);
     setCurrentUser((u: any) => u && { ...u, activeFamilyId: newFamily.id });
     showToast(`Famille « ${name} » créée`, "sage");
+  };
+
+  const handleAddFamilyMemberByEmail = async (familyId: string, email: string) => {
+    if (currentUser.id === "demo") throw new Error("Ajout par email indisponible pour le compte démo.");
+
+    const sb = await getSupabase();
+    if (!sb) throw new Error("Connexion à la base de données indisponible.");
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data, error } = await sb.rpc("add_family_member_by_email", { p_family_id: familyId, p_email: normalizedEmail });
+    if (error) {
+      const messages: Record<string, string> = {
+        not_authorized: "Seul le créateur de la famille peut ajouter des membres.",
+        user_not_found: "Aucun utilisateur trouvé avec cet email.",
+        already_member: "Cette personne est déjà membre de la famille.",
+      };
+      throw new Error(messages[error.message] || error.message);
+    }
+
+    setFamilies((prev: any[]) => prev.map((f) => f.id !== familyId ? f : {
+      ...f,
+      members: [...f.members, {
+        memberId: data.member_id,
+        userId: data.profile_id,
+        userName: data.name,
+        userEmail: normalizedEmail,
+        role: "member",
+      }],
+    }));
+    showToast(`${data.name} a été ajouté(e) à la famille`, "sage");
+  };
+
+  const handleAddLocalFamilyMember = async (familyId: string, name: string) => {
+    const trimmedName = name.trim();
+    if (currentUser.id === "demo") {
+      setFamilies((prev: any[]) => prev.map((f) => f.id !== familyId ? f : {
+        ...f,
+        members: [...f.members, { memberId: `local-${Date.now()}`, userId: null, userName: trimmedName, userEmail: "", role: "member" }],
+      }));
+      showToast(`${trimmedName} ajouté(e) à la famille`, "sage");
+      return;
+    }
+
+    const sb = await getSupabase();
+    if (!sb) throw new Error("Connexion à la base de données indisponible.");
+
+    const { data, error } = await sb
+      .from("family_members")
+      .insert({ family_id: familyId, name: trimmedName })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+
+    setFamilies((prev: any[]) => prev.map((f) => f.id !== familyId ? f : {
+      ...f,
+      members: [...f.members, { memberId: data.member_id, userId: null, userName: data.name, userEmail: "", role: "member" }],
+    }));
+    showToast(`${trimmedName} ajouté(e) à la famille`, "sage");
   };
 
   const handleJoinFamily = async (code: string) => {
@@ -6490,10 +6610,16 @@ const App = () => {
     showToast("Membre promu admin", "sage");
   };
 
-  const handleRemoveMember = (familyId, userId) => {
+  const handleRemoveMember = async (familyId, memberId) => {
+    if (currentUser.id !== "demo") {
+      const sb = await getSupabase();
+      if (!sb) { showToast("Connexion à la base indisponible", "clay"); return; }
+      const { error } = await sb.from("family_members").delete().eq("member_id", memberId);
+      if (error) { showToast("Erreur lors de la suppression du membre", "clay"); return; }
+    }
     setFamilies((prev) => prev.map((f) => {
       if (f.id !== familyId) return f;
-      const remaining = f.members.filter((m) => m.userId !== userId);
+      const remaining = f.members.filter((m) => (m.memberId || m.userId) !== memberId);
       // Si plus d'admin, promouvoir le premier membre
       const hasAdmin = remaining.some((m) => m.role === "admin");
       return { ...f, members: hasAdmin ? remaining : remaining.map((m, i) => i === 0 ? { ...m, role: "admin" } : m) };
@@ -6708,7 +6834,7 @@ const App = () => {
     recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: initialRecipes, ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
     preferences: { currentUser, ingredients, weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate, onUpdateUserProfile: handleUpdateUserProfile },
-    family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode },
+    family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember },
     account: { currentUser, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onNavigate: setCurrentView },
   };
 
