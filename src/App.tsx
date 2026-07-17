@@ -6019,9 +6019,12 @@ const AuthService = (() => {
 
   // Abonnement interne au changement de session Supabase
   let _unsubSupabase: (() => void) | null = null;
+  let _listenerInitialized = false;
   const initSupabaseListener = async () => {
+    if (_listenerInitialized || _unsubSupabase) return;
     const sb = await getSupabase();
     if (!sb || _unsubSupabase) return;
+    _listenerInitialized = true;
     const { data: { subscription } } = sb.auth.onAuthStateChange(
       async (event: string, session: any) => {
         if (!session) { notify(null); return; }
@@ -6042,12 +6045,15 @@ const AuthService = (() => {
         notify(user);
         return { user, error: null };
       }
+      void initSupabaseListener();
       const sb = await getSupabase();
       if (!sb) return { user: null, error: "Client Supabase non initialisé." };
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) return { user: null, error: error.message };
       const profile = await fetchProfile(data.user.id);
       const user = profileToAppUser(data.session, profile);
+      saveToStorage(STORAGE_KEYS.currentUser, user);
+      notify(user);
       return { user, error: null };
     },
 
@@ -6058,6 +6064,7 @@ const AuthService = (() => {
       password: string,
       consents: { consentGeneral: boolean; consentSensitive: boolean; consentDate: string }
     ): Promise<AuthResult> => {
+      void initSupabaseListener();
       const sb = await getSupabase();
       if (!sb) return { user: null, error: "Client Supabase non initialisé." };
       const { data, error } = await sb.auth.signUp({
@@ -6079,6 +6086,8 @@ const AuthService = (() => {
       }
       const profile = await fetchProfile(data.user.id);
       const user = profileToAppUser(data.session, profile);
+      saveToStorage(STORAGE_KEYS.currentUser, user);
+      notify(user);
       return { user, error: null };
     },
 
@@ -6262,7 +6271,7 @@ const App = () => {
   const handleLogin = async (email: string, password: string) => {
     const { user, error } = await AuthService.signIn(email, password);
     if (error) throw new Error(error);
-    // user est notifié via onAuthChange → setCurrentUser automatique
+    setCurrentUser(user);
   };
 
   const handleRegister = async (
@@ -6271,10 +6280,12 @@ const App = () => {
   ) => {
     const { user, error } = await AuthService.signUp(name, email, password, consents);
     if (error) throw new Error(error);
+    setCurrentUser(user);
   };
 
-  const handleLogout = () => {
-    AuthService.signOut();
+  const handleLogout = async () => {
+    await AuthService.signOut();
+    setCurrentUser(null);
     setAuthScreen("login");
   };
 
