@@ -6046,45 +6046,52 @@ const ensureProfile = async (sb: any, userId: string, fallbackName: string, fall
   }
 };
 
-// Charge la famille du profil (public.families + public.family_members) au format front-end.
-const fetchFamilyForUser = async (user: AppUser): Promise<any | null> => {
+// Charge toutes les familles dont le profil est membre (public.families + public.family_members).
+// Un profil peut appartenir à plusieurs familles : l'appartenance vit uniquement dans
+// family_members, pas dans profiles.family_id (qui reste toujours null).
+const fetchFamiliesForUser = async (user: AppUser): Promise<any[]> => {
   const sb = await getSupabase();
-  if (!sb) return null;
+  if (!sb) return [];
   try {
-    const { data: profile } = await sb.from("profiles").select("family_id").eq("profile_id", user.id).single();
-    if (!profile?.family_id) return null;
+    const { data: memberOf } = await sb.from("family_members").select("family_id").eq("profile_id", user.id);
+    const { data: owned } = await sb.from("families").select("family_id").eq("owner_profile_id", user.id);
 
-    const { data: familyRow, error: familyError } = await sb
-      .from("families").select("*").eq("family_id", profile.family_id).single();
-    if (familyError || !familyRow) return null;
+    const familyIds = Array.from(new Set([
+      ...((memberOf || []).map((m: any) => m.family_id)),
+      ...((owned || []).map((f: any) => f.family_id)),
+    ]));
+    if (familyIds.length === 0) return [];
 
-    const { data: memberRows } = await sb
-      .from("family_members").select("*").eq("family_id", profile.family_id);
+    const { data: familyRows } = await sb.from("families").select("*").in("family_id", familyIds);
+    const { data: allMemberRows } = await sb.from("family_members").select("*").in("family_id", familyIds);
 
-    const members = (memberRows || []).map((m: any) => ({
-      userId: m.profile_id,
-      userName: m.name,
-      userEmail: m.profile_id === user.id ? user.email : "",
-      role: m.profile_id === familyRow.owner_profile_id ? "admin" : "member",
-    }));
-    // Garantit que l'utilisateur courant apparaît, même sans ligne family_members dédiée.
-    if (!members.some((m) => m.userId === user.id)) {
-      members.push({
-        userId: user.id,
-        userName: user.name,
-        userEmail: user.email,
-        role: user.id === familyRow.owner_profile_id ? "admin" : "member",
-      });
-    }
-
-    return {
-      id: familyRow.family_id,
-      name: familyRow.name,
-      inviteCode: familyRow.invite_code,
-      members,
-    };
+    return (familyRows || []).map((familyRow: any) => {
+      const members = (allMemberRows || [])
+        .filter((m: any) => m.family_id === familyRow.family_id)
+        .map((m: any) => ({
+          userId: m.profile_id,
+          userName: m.name,
+          userEmail: m.profile_id === user.id ? user.email : "",
+          role: m.profile_id === familyRow.owner_profile_id ? "admin" : "member",
+        }));
+      // Garantit que l'utilisateur courant apparaît, même sans ligne family_members dédiée.
+      if (!members.some((m) => m.userId === user.id)) {
+        members.push({
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          role: user.id === familyRow.owner_profile_id ? "admin" : "member",
+        });
+      }
+      return {
+        id: familyRow.family_id,
+        name: familyRow.name,
+        inviteCode: familyRow.invite_code,
+        members,
+      };
+    });
   } catch {
-    return null;
+    return [];
   }
 };
 
@@ -6359,14 +6366,15 @@ const App = () => {
   // Note: currentUser est persisté par AuthService, pas ici
   useEffect(() => saveToStorage(STORAGE_KEYS.families, families), [families]);
 
-  // ── Chargement de la famille réelle depuis Supabase (comptes non-démo) ──
+  // ── Chargement des familles réelles depuis Supabase (comptes non-démo) ──
   useEffect(() => {
     if (!currentUser || currentUser.id === "demo") return;
     let cancelled = false;
     (async () => {
-      const family = await fetchFamilyForUser(currentUser);
-      if (!cancelled && family) {
-        setFamilies((prev) => [...prev.filter((f) => f.id !== family.id), family]);
+      const loaded = await fetchFamiliesForUser(currentUser);
+      if (!cancelled && loaded.length > 0) {
+        const loadedIds = new Set(loaded.map((f) => f.id));
+        setFamilies((prev) => [...prev.filter((f) => !loadedIds.has(f.id)), ...loaded]);
       }
     })();
     return () => { cancelled = true; };
@@ -6426,7 +6434,7 @@ const App = () => {
 
     const { error: profileError } = await sb
       .from("profiles")
-      .update({ family_id: familyRow.family_id, active_family_id: familyRow.family_id })
+      .update({ active_family_id: familyRow.family_id })
       .eq("profile_id", currentUser.id);
     if (profileError) throw new Error(profileError.message);
 
