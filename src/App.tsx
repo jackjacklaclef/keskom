@@ -6552,6 +6552,9 @@ const App = () => {
     const stored = loadFromStorage(STORAGE_KEYS.families, null);
     return stored || [DEMO_FAMILY];
   });
+  // Évite d'afficher à tort l'écran « créer/rejoindre une famille » pendant le
+  // court instant où les familles réelles sont encore en cours de chargement.
+  const [familiesLoaded, setFamiliesLoaded] = useState(false);
   // Comptes réels : données chargées depuis Supabase via useEffect ci-dessous.
   // Compte démo : jeu de données local, comme avant.
   const isDemo = currentUser?.id === "demo";
@@ -6623,12 +6626,15 @@ const App = () => {
   useEffect(() => {
     if (!currentUser || currentUser.id === "demo") return;
     let cancelled = false;
+    setFamiliesLoaded(false);
     (async () => {
       const loaded = await fetchFamiliesForUser(currentUser);
-      if (!cancelled && loaded.length > 0) {
+      if (cancelled) return;
+      if (loaded.length > 0) {
         const loadedIds = new Set(loaded.map((f) => f.id));
         setFamilies((prev) => [...prev.filter((f) => !loadedIds.has(f.id)), ...loaded]);
       }
+      setFamiliesLoaded(true);
     })();
     return () => { cancelled = true; };
   }, [currentUser?.id]);
@@ -7313,8 +7319,13 @@ const App = () => {
     }
   };
 
-  // L'utilisateur est connecté mais n'a pas de famille → FamilySetupView obligatoire
-  const needsFamilySetup = currentUser && !currentUser.activeFamilyId && currentUser.id !== "demo";
+  // Chargement en cours des familles réelles : on ne sait pas encore si l'utilisateur en a une.
+  const familiesLoading = currentUser && currentUser.id !== "demo" && !familiesLoaded;
+
+  // L'utilisateur est connecté mais n'est membre d'aucune famille → FamilySetupView obligatoire
+  // (basé sur l'appartenance réelle via userFamilies, pas sur activeFamilyId qui peut être
+  // absent/périmé même quand l'utilisateur a bien une famille)
+  const needsFamilySetup = currentUser && currentUser.id !== "demo" && familiesLoaded && userFamilies.length === 0;
 
   return (
     <div className={`mp-root${darkMode ? " dark" : ""}`}>
@@ -7325,11 +7336,18 @@ const App = () => {
       {!currentUser && authScreen === "register" && <RegisterView onRegister={handleRegister} onGoLogin={() => setAuthScreen("login")} />}
       {!currentUser && authScreen === "forgot" && <ForgotPasswordView onGoLogin={() => setAuthScreen("login")} />}
 
+      {/* Chargement des familles réelles (bref instant après connexion) */}
+      {familiesLoading && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
+          <p className="mp-small mp-text-faint">Chargement…</p>
+        </div>
+      )}
+
       {/* Setup famille obligatoire */}
       {needsFamilySetup && <FamilySetupView currentUser={currentUser} onCreateFamily={handleCreateFamily} onJoinFamily={handleJoinFamily} />}
 
       {/* App principale */}
-      {currentUser && !needsFamilySetup && (
+      {currentUser && !needsFamilySetup && !familiesLoading && (
         <>
           <div className="mp-shell">
             <Sidebar currentView={currentView} onNavigate={setCurrentView} darkMode={darkMode} onToggleDark={() => setDarkMode((v) => !v)} currentUser={currentUser} onLogout={handleLogout} families={userFamilies} activeFamily={activeFamily} onSetActiveFamily={handleSetActiveFamily} />
