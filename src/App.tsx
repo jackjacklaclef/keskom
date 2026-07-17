@@ -3043,9 +3043,13 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
   const [showDescription, setShowDescription] = useState(!!(recipe?.description));
   const [showIngredients, setShowIngredients] = useState(!!(recipe?.ingredients?.length));
   const [showTags, setShowTags] = useState(!!(recipe?.tags?.length));
+  const [showSteps, setShowSteps] = useState(!!(recipe?.steps?.length));
   const [recipeIngredients, setRecipeIngredients] = useState(recipe?.ingredients || []);
   const [tags, setTags] = useState(recipe?.tags || []);
   const [tagInput, setTagInput] = useState("");
+  const [steps, setSteps] = useState(recipe?.steps || []);
+  const [stepTitleInput, setStepTitleInput] = useState("");
+  const [stepBodyInput, setStepBodyInput] = useState("");
   const [pickerCategory, setPickerCategory] = useState("legumes");
   const [pickerSearch, setPickerSearch] = useState("");
   const [pickedIngredient, setPickedIngredient] = useState(null);
@@ -3075,9 +3079,23 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
     setTagInput("");
   };
 
+  const addStep = () => {
+    if (!stepBodyInput.trim()) return;
+    setSteps((prev) => [...prev, { id: `new-${Date.now()}`, title: stepTitleInput.trim(), body: stepBodyInput.trim() }]);
+    setStepTitleInput(""); setStepBodyInput("");
+  };
+  const removeStep = (idx) => setSteps((prev) => prev.filter((_, i) => i !== idx));
+  const moveStep = (idx, dir) => setSteps((prev) => {
+    const target = idx + dir;
+    if (target < 0 || target >= prev.length) return prev;
+    const copy = [...prev];
+    [copy[idx], copy[target]] = [copy[target], copy[idx]];
+    return copy;
+  });
+
   const handleSave = () => {
     if (!name.trim()) return;
-    onSave({ id: recipe?.id || Date.now().toString(), name: name.trim(), category, portions, description: description.trim(), ingredients: recipeIngredients, tags, parentId: recipe?.parentId || null, rootId: recipe?.rootId || null, variantName: variantName.trim() || null });
+    onSave({ id: recipe?.id || Date.now().toString(), name: name.trim(), category, portions, description: description.trim(), ingredients: recipeIngredients, tags, steps, parentId: recipe?.parentId || null, rootId: recipe?.rootId || null, variantName: variantName.trim() || null });
   };
 
   // Bouton "Ajouter X" discret — utilisé pour les sections optionnelles
@@ -3262,6 +3280,54 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
         <AddLink label={`Ajouter des tags${tags.length > 0 ? ` (${tags.length})` : ""}`} onClick={() => setShowTags(true)} />
       )}
 
+      {/* Étapes */}
+      {showSteps ? (
+        <div style={{ marginBottom: "0.65rem" }}>
+          <span className="mp-label">Étapes{steps.length > 0 && ` (${steps.length})`}</span>
+
+          {steps.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.5rem" }}>
+              {steps.map((step, idx) => (
+                <div key={step.id || idx} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", background: "var(--paper-sunken)", borderRadius: radius.sm, border: "1px solid var(--line)" }}>
+                  <span className="mp-badge mp-badge-neutral" style={{ flexShrink: 0, marginTop: "0.1rem" }}>{idx + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {step.title && <p className="mp-small" style={{ fontWeight: 600, marginBottom: "0.15rem" }}>{step.title}</p>}
+                    <p className="mp-small mp-text-soft" style={{ whiteSpace: "pre-wrap" }}>{step.body}</p>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem", flexShrink: 0 }}>
+                    <button type="button" onClick={() => moveStep(idx, -1)} disabled={idx === 0}
+                      style={{ background: "none", border: "none", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? "var(--ink-faint)" : "var(--ink-soft)", padding: "0.1rem", display: "flex" }} aria-label="Monter">
+                      <Icon name="chevronLeft" size={13} />
+                    </button>
+                    <button type="button" onClick={() => moveStep(idx, 1)} disabled={idx === steps.length - 1}
+                      style={{ background: "none", border: "none", cursor: idx === steps.length - 1 ? "default" : "pointer", color: idx === steps.length - 1 ? "var(--ink-faint)" : "var(--ink-soft)", padding: "0.1rem", display: "flex" }} aria-label="Descendre">
+                      <Icon name="chevronRight" size={13} />
+                    </button>
+                    <button type="button" onClick={() => removeStep(idx)}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)", padding: "0.1rem", display: "flex" }} aria-label="Supprimer">
+                      <Icon name="x" size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ border: "1px solid var(--line)", borderRadius: radius.md, padding: "0.5rem", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <input className="mp-input" style={{ fontSize: "0.82rem" }} value={stepTitleInput}
+              onChange={(e) => setStepTitleInput(e.target.value)} placeholder="Titre de l'étape (optionnel)" />
+            <textarea className="mp-textarea" style={{ minHeight: "2.2rem", fontSize: "0.82rem" }} value={stepBodyInput}
+              onChange={(e) => setStepBodyInput(e.target.value)} placeholder="Description de l'étape..." />
+            <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ alignSelf: "flex-end" }}
+              onClick={addStep} disabled={!stepBodyInput.trim()}>
+              <Icon name="plus" size={13} /> Ajouter l'étape
+            </button>
+          </div>
+        </div>
+      ) : (
+        <AddLink label={`Ajouter des étapes${steps.length > 0 ? ` (${steps.length})` : ""}`} onClick={() => setShowSteps(true)} />
+      )}
+
       {/* Actions */}
       <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end", paddingTop: "0.65rem", borderTop: "1px solid var(--line)", marginTop: "0.25rem" }}>
         <button type="button" className="mp-btn mp-btn-secondary" onClick={onClose}>Annuler</button>
@@ -3273,10 +3339,65 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
   );
 };
 
+// Mode cuisine — affiche les étapes une par une, en plein écran de la modale
+const CookModeModal = ({ recipe, onClose }) => {
+  const steps = recipe.steps || [];
+  const [stepIndex, setStepIndex] = useState(0);
+  const step = steps[stepIndex];
+  const isFirst = stepIndex === 0;
+  const isLast = stepIndex === steps.length - 1;
+
+  return (
+    <Modal onClose={onClose} width="min(560px, 92vw)">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: space.md }}>
+        <div>
+          <p className="mp-micro mp-text-faint" style={{ textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Mode cuisine</p>
+          <h2 className="mp-h2">{recipe.name}</h2>
+        </div>
+        <button type="button" className="mp-btn mp-btn-ghost mp-btn-icon" onClick={onClose} aria-label="Fermer">
+          <Icon name="x" size={15} />
+        </button>
+      </div>
+
+      {/* Progression */}
+      <div style={{ display: "flex", gap: "0.3rem", marginBottom: space.lg }}>
+        {steps.map((_, i) => (
+          <div key={i} style={{ flex: 1, height: "4px", borderRadius: radius.pill, background: i <= stepIndex ? "var(--clay)" : "var(--line)" }} />
+        ))}
+      </div>
+
+      {/* Étape courante */}
+      <div style={{ minHeight: "160px" }}>
+        <p className="mp-micro mp-text-soft" style={{ textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
+          Étape {stepIndex + 1} / {steps.length}
+        </p>
+        {step.title && <h3 className="mp-h3" style={{ marginBottom: "0.6rem" }}>{step.title}</h3>}
+        <p className="mp-body" style={{ lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{step.body}</p>
+      </div>
+
+      {/* Navigation */}
+      <div style={{ display: "flex", gap: "0.5rem", justifyContent: "space-between", marginTop: space.xl, paddingTop: space.lg, borderTop: "1px solid var(--line)" }}>
+        <button type="button" className="mp-btn mp-btn-secondary" onClick={() => setStepIndex((i) => Math.max(0, i - 1))} disabled={isFirst}>
+          <Icon name="chevronLeft" size={14} /> Précédent
+        </button>
+        {isLast ? (
+          <button type="button" className="mp-btn mp-btn-primary" onClick={onClose}>
+            <Icon name="check" size={14} /> Terminé
+          </button>
+        ) : (
+          <button type="button" className="mp-btn mp-btn-primary" onClick={() => setStepIndex((i) => Math.min(steps.length - 1, i + 1))}>
+            Suivant <Icon name="chevronRight" size={14} />
+          </button>
+        )}
+      </div>
+    </Modal>
+  );
+};
 
 // Fiche détaillée d'une recette
 const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], currentUser, userFamilies = [], activeFamily, onClose, onEdit, onCreateVariant, onShareRecipe }) => {
   const [tab, setTab] = useState("recipe"); // "recipe" | "variants"
+  const [showCookMode, setShowCookMode] = useState(false);
   const cat = RECIPE_CATEGORIES.find((c) => c.id === recipe.category);
   const isOwner = recipe.createdBy === currentUser?.id || !recipe.createdBy;
 
@@ -3388,8 +3509,34 @@ const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], currentUser, 
           ) : (
             <p className="mp-small mp-text-faint">Aucun ingrédient renseigné.</p>
           )}
+
+          {recipe.steps?.length > 0 && (
+            <div style={{ marginTop: space.lg }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                <p className="mp-micro mp-text-soft" style={{ textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>
+                  Étapes ({recipe.steps.length})
+                </p>
+                <button type="button" className="mp-btn mp-btn-primary mp-btn-sm" onClick={() => setShowCookMode(true)}>
+                  <Icon name="chevronRight" size={13} /> Mode cuisine
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {recipe.steps.map((step, idx) => (
+                  <div key={step.id || idx} style={{ display: "flex", gap: "0.5rem" }}>
+                    <span className="mp-badge mp-badge-neutral" style={{ flexShrink: 0, height: "fit-content" }}>{idx + 1}</span>
+                    <div>
+                      {step.title && <p className="mp-small" style={{ fontWeight: 600 }}>{step.title}</p>}
+                      <p className="mp-small mp-text-soft" style={{ whiteSpace: "pre-wrap" }}>{step.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
+
+      {showCookMode && <CookModeModal recipe={recipe} onClose={() => setShowCookMode(false)} />}
 
       {/* ── Onglet Variantes ── */}
       {tab === "variants" && (
@@ -6157,7 +6304,8 @@ const fetchRecipesForUser = async (): Promise<any[]> => {
       id, name, description, portions, tags, scope, owner_profile_id, family_id, variant_name,
       recipe_categories(short_name),
       recipe_ingredients(ingredient_id, quantity_label, order_index, ingredients(name)),
-      recipe_family_shares(family_id)
+      recipe_family_shares(family_id),
+      recipe_steps(id, order_index, title, body)
     `)
     .order("name");
   if (error || !rows) return [];
@@ -6188,6 +6336,9 @@ const fetchRecipesForUser = async (): Promise<any[]> => {
       ingredients: (r.recipe_ingredients || [])
         .sort((a: any, b: any) => a.order_index - b.order_index)
         .map((ri: any) => ({ ingredientId: String(ri.ingredient_id), ingredientName: ri.ingredients?.name, quantity: ri.quantity_label })),
+      steps: (r.recipe_steps || [])
+        .sort((a: any, b: any) => a.order_index - b.order_index)
+        .map((s: any) => ({ id: String(s.id), title: s.title || "", body: s.body })),
     };
   });
 };
@@ -6207,6 +6358,21 @@ const saveRecipeIngredients = async (sb: any, recipeId: number, ingredients: any
     }))
     .filter((row) => row.ingredient_id);
   if (rows.length > 0) await sb.from("recipe_ingredients").insert(rows);
+};
+
+// Remplace entièrement les étapes d'une recette (même principe que les ingrédients).
+const saveRecipeSteps = async (sb: any, recipeId: number, steps: any[]) => {
+  await sb.from("recipe_steps").delete().eq("recipe_id", recipeId);
+  if (steps.length === 0) return;
+  const rows = steps
+    .filter((s: any) => s.body?.trim())
+    .map((s: any, idx: number) => ({
+      recipe_id: recipeId,
+      order_index: idx,
+      title: s.title?.trim() || null,
+      body: s.body.trim(),
+    }));
+  if (rows.length > 0) await sb.from("recipe_steps").insert(rows);
 };
 
 // ---- Repas planifiés (à plat : un élément par créneau date+type) ----
@@ -6885,6 +7051,7 @@ const App = () => {
       }).select("id").single();
       if (error) throw error;
       await saveRecipeIngredients(sb, newRow.id, recipe.ingredients || []);
+      await saveRecipeSteps(sb, newRow.id, recipe.steps || []);
       if (recipe.parentId) {
         await sb.from("recipe_variants").insert({
           variant_recipe_id: newRow.id, parent_recipe_id: Number(recipe.parentId),
@@ -6909,6 +7076,7 @@ const App = () => {
       }).eq("id", Number(updated.id));
       if (error) throw error;
       await saveRecipeIngredients(sb, Number(updated.id), updated.ingredients || []);
+      await saveRecipeSteps(sb, Number(updated.id), updated.steps || []);
       setRecipes(await fetchRecipesForUser());
     } catch { showToast("Erreur lors de la modification de la recette", "clay"); }
   };
@@ -6947,6 +7115,7 @@ const App = () => {
       }).select("id").single();
       if (error) throw error;
       await saveRecipeIngredients(sb, newRow.id, recipe.ingredients || []);
+      await saveRecipeSteps(sb, newRow.id, recipe.steps || []);
       setRecipes(await fetchRecipesForUser());
       showToast(`« ${recipe.name} » ajoutée à ${activeFamily?.name}`, "sage");
     } catch { showToast("Erreur lors de l'import de la recette", "clay"); }
