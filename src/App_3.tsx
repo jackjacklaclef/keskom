@@ -1548,7 +1548,7 @@ const MemberModal = ({ member, onClose, onSave }) => {
   return (
     <Modal onClose={onClose} width="420px">
       <ModalHeader title={member?.id === NEW_MEMBER_SENTINEL ? "Nouveau membre" : "Modifier le membre"} onClose={onClose} />
-      <div>
+      <form onSubmit={handleSubmit}>
         <Field label="Nom *">
           <input className="mp-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Camille" required />
         </Field>
@@ -1563,9 +1563,9 @@ const MemberModal = ({ member, onClose, onSave }) => {
         </Field>
         <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end", marginTop: space.lg }}>
           <button type="button" className="mp-btn mp-btn-secondary" onClick={onClose}>Annuler</button>
-          <button type="button" className="mp-btn mp-btn-primary">Enregistrer</button>
+          <button type="submit" className="mp-btn mp-btn-primary">Enregistrer</button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 };
@@ -1659,170 +1659,219 @@ const MobileDrawer = ({ currentView, onNavigate, darkMode, onToggleDark, current
   </>
 );
 
-const LogoMark = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 215" width="36" height="26">
-    <defs><filter id="lm-shadow"><feDropShadow dx="0" dy="2" stdDeviation="5" floodColor="#3D5C2E" floodOpacity="0.2"/></filter></defs>
-    <g filter="url(#lm-shadow)">
-      <circle cx="150" cy="107" r="72" fill="#6B8C5A"/>
-      <circle cx="150" cy="107" r="54" fill="#F5F0E8"/>
-    </g>
-    <path d="M140 97 Q140 79 150 77 Q161 77 163 87 Q165 97 156 105 Q151 110 151 123" fill="none" stroke="#6B8C5A" strokeWidth="8" strokeLinecap="round"/>
-    <circle cx="151" cy="135" r="5.5" fill="#6B8C5A"/>
-    <g transform="translate(38,107)">
-      <rect x="-4" y="14" width="8" height="52" rx="4" fill="#6B8C5A"/>
-      <rect x="-4" y="-22" width="8" height="38" rx="2" fill="#6B8C5A"/>
-      <rect x="-10" y="-58" width="4" height="38" rx="2" fill="#6B8C5A"/>
-      <rect x="-3" y="-62" width="4" height="42" rx="2" fill="#6B8C5A"/>
-      <rect x="4" y="-58" width="4" height="38" rx="2" fill="#6B8C5A"/>
-    </g>
-    <g transform="translate(262,107)">
-      <rect x="-4" y="14" width="8" height="52" rx="4" fill="#6B8C5A"/>
-      <rect x="-4" y="-62" width="8" height="78" rx="2" fill="#6B8C5A"/>
-      <path d="M4 -62 Q14 -46 14 -26 Q14 -10 4 -2 L4 -62 Z" fill="#6B8C5A" fillOpacity="0.65"/>
-    </g>
-  </svg>
-);
-
-const FamilySelector = ({ families, activeFamily, onSetActiveFamily, onNavigate }) => {
-  const [open, setOpen] = useState(false);
-  const hasMultiple = families.length > 1;
-  return (
-    <div style={{ position: "relative" }}>
-      <button type="button" onClick={() => hasMultiple && setOpen((v) => !v)}
-        style={{ display: "flex", alignItems: "center", gap: "0.4rem", width: "100%", background: "var(--sage-wash)", border: "1px solid var(--sage-soft)", borderRadius: radius.sm, padding: "0.35rem 0.6rem", cursor: hasMultiple ? "pointer" : "default", fontFamily: "inherit" }}>
-        <span style={{ width: "0.5rem", height: "0.5rem", borderRadius: "50%", background: "var(--sage)", flexShrink: 0 }} />
-        <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--sage)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, textAlign: "left" }}>
-          {activeFamily?.name || "Aucune famille"}
-        </span>
-        {hasMultiple && (
-          <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="var(--sage)" strokeWidth={2.5} strokeLinecap="round" style={{ flexShrink: 0 }}>
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        )}
-      </button>
-      {open && hasMultiple && (
-        <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 399 }} onClick={() => setOpen(false)} />
-          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--paper-raised)", border: "1px solid var(--line)", borderRadius: radius.md, boxShadow: "0 8px 24px rgba(0,0,0,0.14)", zIndex: 400, overflow: "hidden", minWidth: "160px" }}>
-            {families.map((f) => {
-              const isActive = f.id === activeFamily?.id;
-              return (
-                <button key={f.id} type="button" onClick={() => { onSetActiveFamily(f.id); setOpen(false); }}
-                  style={{ display: "flex", alignItems: "center", gap: "0.55rem", width: "100%", padding: "0.6rem 0.75rem", background: isActive ? "var(--sage-wash)" : "transparent", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
-                  onMouseEnter={(e) => !isActive && (e.currentTarget.style.background = "var(--paper-sunken)")}
-                  onMouseLeave={(e) => !isActive && (e.currentTarget.style.background = "transparent")}>
-                  <span style={{ width: "0.5rem", height: "0.5rem", borderRadius: "50%", background: isActive ? "var(--sage)" : "var(--line)", flexShrink: 0 }} />
-                  <span style={{ fontSize: "0.82rem", fontWeight: isActive ? 700 : 400, color: isActive ? "var(--sage)" : "var(--ink)", flex: 1 }}>{f.name}</span>
-                  {isActive && <Icon name="check" size={13} color="var(--sage)" />}
-                </button>
-              );
-            })}
-            <button type="button" onClick={() => { onNavigate("family"); setOpen(false); }}
-              style={{ display: "flex", alignItems: "center", gap: "0.5rem", width: "100%", padding: "0.55rem 0.75rem", background: "var(--paper-sunken)", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.78rem", color: "var(--clay)", fontWeight: 600 }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "var(--clay-wash)"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "var(--paper-sunken)"}>
-              <Icon name="plus" size={12} /> Gérer les familles
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-const Sidebar = ({ currentView, onNavigate, darkMode, onToggleDark, currentUser, onLogout, families = [], activeFamily, onSetActiveFamily }) => {
+const Sidebar = ({ currentView, onNavigate, darkMode, onToggleDark, currentUser, onLogout }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const secondaryActive = NAV_SECONDARY.some((i) => i.id === currentView);
+
   return (
     <>
-      {/* Desktop sidebar */}
-      <nav className="mp-hide-mobile" style={{ width: "210px", flexShrink: 0, borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", background: "var(--paper-raised)" }}>
-        <div style={{ padding: "1.1rem 1rem 0.85rem", borderBottom: "1px solid var(--line)" }}>
-          <div style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: activeFamily ? "0.75rem" : 0 }} onClick={() => onNavigate("calendar")}>
-            <LogoMark />
-            <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700, fontSize: "1rem", color: "var(--sage)", letterSpacing: "0.15em", textTransform: "uppercase" }}>Keskon'm</span>
-          </div>
-          {activeFamily && <FamilySelector families={families} activeFamily={activeFamily} onSetActiveFamily={onSetActiveFamily} onNavigate={onNavigate} />}
+      {/* ══════════════════════════════════════════ */}
+      {/* Desktop sidebar                           */}
+      {/* ══════════════════════════════════════════ */}
+      <nav className="mp-hide-mobile" style={{
+        width: "210px", flexShrink: 0,
+        borderRight: "1px solid var(--line)",
+        display: "flex", flexDirection: "column",
+        background: "var(--paper-raised)",
+      }}>
+        {/* Logo — haut gauche */}
+        <div style={{
+          padding: "1.25rem 1rem 1rem",
+          borderBottom: "1px solid var(--line)",
+          cursor: "pointer",
+        }} onClick={() => onNavigate("calendar")}>
+          <KeskомLogo size="sm" />
         </div>
+
+        {/* Navigation principale */}
         <div style={{ padding: "0.75rem 0.75rem 0", flex: 1, display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-            {NAV_PRIMARY.map((item) => <NavButton key={item.id} item={item} active={currentView === item.id} onClick={onNavigate} />)}
+            {NAV_PRIMARY.map((item) => (
+              <NavButton key={item.id} item={item} active={currentView === item.id} onClick={onNavigate} />
+            ))}
           </div>
+
+          {/* Séparateur Paramètres */}
           <div style={{ marginTop: "1.25rem" }}>
-            <p className="mp-micro mp-text-faint" style={{ textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, padding: "0 0.5rem", marginBottom: "0.35rem" }}>Paramètres</p>
+            <p className="mp-micro mp-text-faint" style={{
+              textTransform: "uppercase", letterSpacing: "0.08em",
+              fontWeight: 700, padding: "0 0.5rem", marginBottom: "0.35rem",
+            }}>Paramètres</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.1rem" }}>
-              {NAV_SECONDARY.map((item) => <NavButton key={item.id} item={item} active={currentView === item.id} onClick={onNavigate} size="sm" />)}
+              {NAV_SECONDARY.map((item) => (
+                <NavButton key={item.id} item={item} active={currentView === item.id} onClick={onNavigate} size="sm" />
+              ))}
             </div>
           </div>
+
           <div style={{ flex: 1 }} />
         </div>
+
+        {/* Bas de sidebar — dark mode + utilisateur */}
         <div style={{ padding: "0.75rem", borderTop: "1px solid var(--line)" }}>
-          <button type="button" onClick={onToggleDark} className="mp-btn mp-btn-ghost" style={{ justifyContent: "flex-start", width: "100%", marginBottom: "0.5rem" }}>
-            <Icon name={darkMode ? "sun" : "moon"} size={15} /> {darkMode ? "Mode clair" : "Mode sombre"}
+          <button type="button" onClick={onToggleDark}
+            className="mp-btn mp-btn-ghost"
+            style={{ justifyContent: "flex-start", width: "100%", marginBottom: "0.5rem" }}>
+            <Icon name={darkMode ? "sun" : "moon"} size={15} />
+            {darkMode ? "Mode clair" : "Mode sombre"}
           </button>
+
           {currentUser && (
             <div style={{ borderTop: "1px solid var(--line)", paddingTop: "0.6rem" }}>
+              {/* Bloc utilisateur cliquable → AccountView */}
               <button type="button" onClick={() => onNavigate("account")}
-                style={{ display: "flex", alignItems: "center", gap: "0.55rem", width: "100%", background: currentView === "account" ? "var(--clay-wash)" : "transparent", border: "none", borderRadius: radius.sm, padding: "0.45rem 0.5rem", cursor: "pointer", textAlign: "left", transition: "background 100ms" }}>
-                <div style={{ width: "1.8rem", height: "1.8rem", borderRadius: "50%", background: "var(--clay-wash)", border: "1.5px solid var(--clay-soft)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--clay)" }}>{currentUser.name?.charAt(0).toUpperCase()}</span>
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.55rem",
+                  width: "100%", background: currentView === "account" ? "var(--clay-wash)" : "transparent",
+                  border: "none", borderRadius: radius.sm, padding: "0.45rem 0.5rem",
+                  cursor: "pointer", textAlign: "left", transition: "background 100ms",
+                }}>
+                {/* Avatar initiale */}
+                <div style={{
+                  width: "1.8rem", height: "1.8rem", borderRadius: "50%",
+                  background: "var(--clay-wash)", border: "1.5px solid var(--clay-soft)",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--clay)" }}>
+                    {currentUser.name?.charAt(0).toUpperCase()}
+                  </span>
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <p className="mp-small" style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.name}</p>
-                  <p className="mp-micro mp-text-faint" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.email}</p>
+                  <p className="mp-small" style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {currentUser.name}
+                  </p>
+                  <p className="mp-micro mp-text-faint" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {currentUser.email}
+                  </p>
                 </div>
               </button>
-              <button type="button" className="mp-btn mp-btn-ghost" style={{ justifyContent: "flex-start", width: "100%", color: "var(--berry)", marginTop: "0.15rem" }} onClick={onLogout}>
+
+              <button type="button" className="mp-btn mp-btn-ghost"
+                style={{ justifyContent: "flex-start", width: "100%", color: "var(--berry)", marginTop: "0.15rem" }}
+                onClick={onLogout}>
                 <Icon name="x" size={13} /> Se déconnecter
               </button>
             </div>
           )}
         </div>
       </nav>
-      {/* Mobile topbar */}
-      <header className="mp-hide-desktop" style={{ position: "fixed", top: 0, left: 0, right: 0, height: "52px", background: "var(--paper-raised)", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", padding: "0 0.75rem", zIndex: 900, gap: "0.5rem" }}>
-        <div onClick={() => onNavigate("calendar")} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
-          <LogoMark />
-          <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700, fontSize: "0.85rem", color: "var(--sage)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Keskon'm</span>
+
+      {/* ══════════════════════════════════════════ */}
+      {/* Mobile — topbar + bottom nav              */}
+      {/* ══════════════════════════════════════════ */}
+
+      {/* Topbar mobile */}
+      <header className="mp-hide-desktop" style={{
+        position: "fixed", top: 0, left: 0, right: 0, height: "52px",
+        background: "var(--paper-raised)", borderBottom: "1px solid var(--line)",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 1rem", zIndex: 900,
+      }}>
+        {/* Logo à gauche */}
+        <div onClick={() => onNavigate("calendar")} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {/* SVG miniature inline */}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 215" width="32" height="23">
+            <defs>
+              <filter id="kshadow-m">
+                <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#3D5C2E" floodOpacity="0.2"/>
+              </filter>
+            </defs>
+            <g filter="url(#kshadow-m)">
+              <circle cx="150" cy="107" r="72" fill="#6B8C5A"/>
+              <circle cx="150" cy="107" r="54" fill="#F5F0E8"/>
+            </g>
+            <path d="M140 97 Q140 79 150 77 Q161 77 163 87 Q165 97 156 105 Q151 110 151 123"
+                  fill="none" stroke="#6B8C5A" strokeWidth="8" strokeLinecap="round"/>
+            <circle cx="151" cy="135" r="5.5" fill="#6B8C5A"/>
+            <g transform="translate(38, 107)">
+              <rect x="-4" y="14" width="8" height="52" rx="4" fill="#6B8C5A"/>
+              <rect x="-4" y="-22" width="8" height="38" rx="2" fill="#6B8C5A"/>
+              <rect x="-10" y="-58" width="4" height="38" rx="2" fill="#6B8C5A"/>
+              <rect x="-3" y="-62" width="4" height="42" rx="2" fill="#6B8C5A"/>
+              <rect x="4" y="-58" width="4" height="38" rx="2" fill="#6B8C5A"/>
+            </g>
+            <g transform="translate(262, 107)">
+              <rect x="-4" y="14" width="8" height="52" rx="4" fill="#6B8C5A"/>
+              <rect x="-4" y="-62" width="8" height="78" rx="2" fill="#6B8C5A"/>
+              <path d="M4 -62 Q14 -46 14 -26 Q14 -10 4 -2 L4 -62 Z" fill="#6B8C5A" fillOpacity="0.65"/>
+            </g>
+          </svg>
+          <span style={{
+            fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700,
+            fontSize: "1rem", color: "var(--sage)", letterSpacing: "0.15em",
+            textTransform: "uppercase",
+          }}>Keskon'm</span>
         </div>
-        {activeFamily && (
-          <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
-            <div style={{ maxWidth: "160px", width: "100%" }}>
-              <FamilySelector families={families} activeFamily={activeFamily} onSetActiveFamily={onSetActiveFamily} onNavigate={onNavigate} />
-            </div>
-          </div>
-        )}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-          <button type="button" onClick={() => setDrawerOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-soft)", display: "flex", padding: "0.2rem" }}>
-            <svg width={20} height={20} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+
+        {/* Avatar + bouton "…" à droite */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <button type="button" onClick={() => setDrawerOpen(true)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-soft)", display: "flex", alignItems: "center", padding: "0.2rem" }}>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+            </svg>
           </button>
           {currentUser && (
             <button type="button" onClick={() => onNavigate("account")}
-              style={{ width: "2rem", height: "2rem", borderRadius: "50%", background: currentView === "account" ? "var(--clay)" : "var(--clay-wash)", border: "1.5px solid var(--clay-soft)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: currentView === "account" ? "#fff" : "var(--clay)" }}>{currentUser.name?.charAt(0).toUpperCase()}</span>
+              style={{
+                width: "2rem", height: "2rem", borderRadius: "50%",
+                background: currentView === "account" ? "var(--clay)" : "var(--clay-wash)",
+                border: "1.5px solid var(--clay-soft)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", flexShrink: 0,
+              }}>
+              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: currentView === "account" ? "#fff" : "var(--clay)" }}>
+                {currentUser.name?.charAt(0).toUpperCase()}
+              </span>
             </button>
           )}
         </div>
       </header>
+
       {/* Bottom nav mobile */}
-      <nav className="mp-hide-desktop" style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--paper-raised)", borderTop: "1px solid var(--line)", display: "flex", zIndex: 900, padding: "0.2rem 0" }}>
+      <nav className="mp-hide-desktop" style={{
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        background: "var(--paper-raised)", borderTop: "1px solid var(--line)",
+        display: "flex", zIndex: 900, padding: "0.2rem 0",
+      }}>
         {NAV_PRIMARY.map((item) => {
           const active = currentView === item.id;
           return (
             <button key={item.id} type="button" onClick={() => onNavigate(item.id)}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", padding: "0.45rem 0.1rem", background: "transparent", border: "none", color: active ? "var(--clay)" : "var(--ink-faint)", cursor: "pointer", transition: "color 100ms" }}>
+              style={{
+                flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
+                padding: "0.45rem 0.1rem", background: "transparent", border: "none",
+                color: active ? "var(--clay)" : "var(--ink-faint)", cursor: "pointer", transition: "color 100ms",
+              }}>
               <Icon name={item.icon} size={20} />
-              <span style={{ fontSize: "0.65rem", fontWeight: active ? 600 : 400 }}>{item.label}</span>
+              <span style={{ fontSize: "0.65rem", fontWeight: active ? 600 : 400, letterSpacing: "0.01em" }}>
+                {item.label}
+              </span>
             </button>
           );
         })}
+
+        {/* Bouton "…" → drawer */}
         <button type="button" onClick={() => setDrawerOpen(true)}
-          style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", padding: "0.45rem 0.1rem", background: "transparent", border: "none", color: secondaryActive ? "var(--clay)" : "var(--ink-faint)", cursor: "pointer" }}>
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+          style={{
+            flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
+            padding: "0.45rem 0.1rem", background: "transparent", border: "none",
+            color: secondaryActive ? "var(--clay)" : "var(--ink-faint)", cursor: "pointer", transition: "color 100ms",
+          }} aria-label="Plus">
+          <svg width={20} height={20} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+          </svg>
           <span style={{ fontSize: "0.65rem", fontWeight: secondaryActive ? 600 : 400 }}>Plus</span>
         </button>
       </nav>
-      {drawerOpen && <MobileDrawer currentView={currentView} onNavigate={onNavigate} darkMode={darkMode} onToggleDark={onToggleDark} currentUser={currentUser} onLogout={onLogout} onClose={() => setDrawerOpen(false)} />}
+
+      {/* Drawer mobile */}
+      {drawerOpen && (
+        <MobileDrawer currentView={currentView} onNavigate={onNavigate}
+          darkMode={darkMode} onToggleDark={onToggleDark}
+          currentUser={currentUser} onLogout={onLogout}
+          onClose={() => setDrawerOpen(false)} />
+      )}
     </>
   );
 };
@@ -2169,13 +2218,6 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
   const [showBreakfast, setShowBreakfast] = useState(() => {
     try { return localStorage.getItem("mealPlanner_showBreakfast") === "true"; } catch { return false; }
   });
-  // Vue personnalisée
-  const [customStart, setCustomStart] = useState(todayStr());
-  const [customEnd, setCustomEnd] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() + 6);
-    return d.toISOString().split("T")[0];
-  });
-  const [showCustomPicker, setShowCustomPicker] = useState(false);
 
   const toggleBreakfast = () => {
     const next = !showBreakfast;
@@ -2188,30 +2230,31 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
 
   // Algo suggestion — peut s'appliquer sur un ensemble de dates
   const suggestForDates = (dates) => {
-    const today = todayStr();
-    const futureDates = dates.filter((d) => d >= today);
-    if (futureDates.length === 0) return 0;
-
+    // Recettes déjà utilisées cette semaine
     const usedIds = new Set(
-      mealPlans.filter((mp) => futureDates.includes(mp.date)).flatMap((mp) => mp.recipeIds || [])
+      mealPlans.filter((mp) => dates.includes(mp.date)).flatMap((mp) => mp.recipeIds || [])
     );
+
     const allergyIngredientIds = new Set();
     const dislikeIngredientIds = new Set();
     familyMembers.forEach((m) => {
       (m.allergies || []).forEach((a) => { if (a.type === "ingredient") allergyIngredientIds.add(a.id); });
       (m.dislikes || []).forEach((d) => { if (d.type === "ingredient") dislikeIngredientIds.add(d.id); });
     });
+
     const categoryMap = {
       breakfast: ["breakfast"],
       lunch: ["main", "soup", "starter", "other"],
       dinner: ["main", "soup", "starter", "other"],
     };
+
     let added = 0;
-    futureDates.forEach((dateStr) => {
+    dates.forEach((dateStr) => {
       visibleMealTypes.forEach((type) => {
         const meal = getMeal(dateStr, type.id);
         const isEmpty = !meal || (meal.status === "normal" && (meal.recipeIds || []).length === 0);
         if (!isEmpty) return;
+
         const candidates = recipes.filter((r) => {
           if (usedIds.has(r.id)) return false;
           if (!categoryMap[type.id]?.includes(r.category)) return false;
@@ -2219,19 +2262,21 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
             allergyIngredientIds.has(ing.ingredientId) || dislikeIngredientIds.has(ing.ingredientId)
           );
         });
+
         if (candidates.length === 0) return;
         const picked = candidates[Math.floor(Math.random() * candidates.length)];
         usedIds.add(picked.id);
+
         if (meal) onUpdateMeal(meal.id, [picked.id], "normal");
         else onAddMeal({ date: dateStr, type: type.id, recipeIds: [picked.id], status: "normal" });
         added++;
       });
     });
+
     return added;
   };
 
   const goToPrevious = () => {
-    if (viewMode === "custom") return; // navigation libre via les date pickers
     const d = new Date(currentDate);
     if (viewMode === "month") d.setMonth(d.getMonth() - 1);
     else d.setDate(d.getDate() - 7);
@@ -2239,38 +2284,13 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
     setSelectedDate(null);
   };
   const goToNext = () => {
-    if (viewMode === "custom") return;
     const d = new Date(currentDate);
     if (viewMode === "month") d.setMonth(d.getMonth() + 1);
     else d.setDate(d.getDate() + 7);
     setCurrentDate(d);
     setSelectedDate(null);
   };
-  const goToToday = () => {
-    if (viewMode === "custom") {
-      const today = todayStr();
-      const d = new Date(); d.setDate(d.getDate() + 6);
-      setCustomStart(today);
-      setCustomEnd(d.toISOString().split("T")[0]);
-    } else {
-      setCurrentDate(new Date());
-      setSelectedDate(null);
-    }
-  };
-
-  // Jours de la plage personnalisée
-  const customDays = useMemo(() => {
-    if (viewMode !== "custom") return [];
-    const days = [];
-    const start = new Date(customStart + "T12:00:00");
-    const end = new Date(customEnd + "T12:00:00");
-    const current = new Date(start);
-    while (current <= end && days.length < 31) { // max 31 jours
-      days.push(new Date(current));
-      current.setDate(current.getDate() + 1);
-    }
-    return days;
-  }, [customStart, customEnd, viewMode]);
+  const goToToday = () => { setCurrentDate(new Date()); setSelectedDate(null); };
 
   // Génère les dates du calendrier groupées par semaine
   const calendarWeeks = useMemo(() => {
@@ -2301,39 +2321,32 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
     <div>
       {/* ── Ligne 1 : navigation temporelle + sélecteur de vue ── */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-        {/* Flèches + titre — masqués en vue custom */}
-        {viewMode !== "custom" && (
-          <button type="button" className="mp-btn mp-btn-secondary mp-btn-icon" onClick={goToPrevious} aria-label="Précédent">
-            <Icon name="chevronLeft" size={15} />
-          </button>
-        )}
-        <h2 className="mp-h2" style={{ minWidth: viewMode === "custom" ? "auto" : "10rem", textAlign: viewMode === "custom" ? "left" : "center" }}>
+        {/* Flèches + titre */}
+        <button type="button" className="mp-btn mp-btn-secondary mp-btn-icon" onClick={goToPrevious} aria-label="Précédent">
+          <Icon name="chevronLeft" size={15} />
+        </button>
+        <h2 className="mp-h2" style={{ minWidth: "10rem", textAlign: "center" }}>
           {viewMode === "month"
             ? `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`
-            : viewMode === "week"
-            ? `Semaine du ${calendarWeeks[0][0].getDate()} ${MONTHS[calendarWeeks[0][0].getMonth()].slice(0, 3)}`
-            : viewMode === "custom" && customDays.length > 0
-            ? `${customDays[0].getDate()} ${MONTHS[customDays[0].getMonth()].slice(0,3)} — ${customDays[customDays.length-1].getDate()} ${MONTHS[customDays[customDays.length-1].getMonth()].slice(0,3)}`
-            : "Plage personnalisée"}
+            : `Semaine du ${calendarWeeks[0][0].getDate()} ${MONTHS[calendarWeeks[0][0].getMonth()].slice(0, 3)}`}
         </h2>
-        {viewMode !== "custom" && (
-          <button type="button" className="mp-btn mp-btn-secondary mp-btn-icon" onClick={goToNext} aria-label="Suivant">
-            <Icon name="chevronRight" size={15} />
-          </button>
-        )}
+        <button type="button" className="mp-btn mp-btn-secondary mp-btn-icon" onClick={goToNext} aria-label="Suivant">
+          <Icon name="chevronRight" size={15} />
+        </button>
         <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" onClick={goToToday}>
           Aujourd'hui
         </button>
 
+        {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Toggle vue — Semaine / Mois / Perso */}
+        {/* Toggle vue — Semaine / Mois */}
         <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: radius.sm, overflow: "hidden" }}>
-          {[["week","Semaine"], ["month","Mois"], ["custom","Perso"]].map(([v, label]) => (
+          {[["week","Semaine"], ["month","Mois"]].map(([v, label]) => (
             <button key={v} type="button"
               onClick={() => setViewMode(v)}
               style={{
-                padding: "0.3rem 0.65rem", border: "none", cursor: "pointer",
+                padding: "0.3rem 0.75rem", border: "none", cursor: "pointer",
                 fontFamily: "inherit", fontSize: "0.82rem", fontWeight: viewMode === v ? 700 : 400,
                 background: viewMode === v ? "var(--clay)" : "transparent",
                 color: viewMode === v ? "#fff" : "var(--ink-soft)",
@@ -2345,23 +2358,6 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
         </div>
       </div>
 
-      {/* Sélecteur de plage — affiché uniquement en vue Perso */}
-      {viewMode === "custom" && (
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem", flexWrap: "wrap", padding: "0.6rem 0.75rem", background: "var(--paper-sunken)", borderRadius: radius.sm, border: "1px solid var(--line)" }}>
-          <Icon name="calendar" size={14} color="var(--clay)" />
-          <span className="mp-small mp-text-soft">Du</span>
-          <input type="date" className="mp-input" style={{ width: "auto", padding: "0.25rem 0.5rem", fontSize: "0.82rem" }}
-            value={customStart} onChange={(e) => {
-              setCustomStart(e.target.value);
-              if (e.target.value > customEnd) setCustomEnd(e.target.value);
-            }} />
-          <span className="mp-small mp-text-soft">au</span>
-          <input type="date" className="mp-input" style={{ width: "auto", padding: "0.25rem 0.5rem", fontSize: "0.82rem" }}
-            value={customEnd} min={customStart} onChange={(e) => setCustomEnd(e.target.value)} />
-          <span className="mp-micro mp-text-faint">({customDays.length} jour{customDays.length > 1 ? "s" : ""})</span>
-        </div>
-      )}
-
       {/* ========== VUE SEMAINE ========== */}
       {viewMode === "week" && calendarWeeks[0] && (() => {
         const week = calendarWeeks[0];
@@ -2372,85 +2368,73 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
             {/* ── Ligne 2 : actions semaine ── */}
             <div style={{
               display: "flex", alignItems: "center", gap: "0.35rem",
-              marginBottom: "0.85rem", position: "relative",
+              marginBottom: "0.85rem", overflowX: "auto", paddingBottom: "2px",
             }}>
-              {/* Groupe gauche scrollable */}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", overflowX: "auto", flex: 1, paddingBottom: "2px" }}>
-                {/* Toggle PDJ */}
-                <button
-                  type="button"
-                  className={`mp-btn mp-btn-sm ${showBreakfast ? "mp-btn-primary" : "mp-btn-secondary"}`}
-                  onClick={toggleBreakfast}
-                  style={{ flexShrink: 0 }}
-                >
-                  <Icon name="sunrise" size={13} /> PDJ
+              {/* Filtre — toggle PDJ */}
+              <button
+                type="button"
+                className={`mp-btn mp-btn-sm ${showBreakfast ? "mp-btn-primary" : "mp-btn-secondary"}`}
+                onClick={toggleBreakfast}
+                title={showBreakfast ? "Masquer le petit-déjeuner" : "Afficher le petit-déjeuner"}
+                style={{ flexShrink: 0 }}
+              >
+                <Icon name="sunrise" size={13} /> PDJ
+              </button>
+
+              {/* Séparateur vertical */}
+              <div style={{ width: "1px", height: "1.5rem", background: "var(--line)", flexShrink: 0, margin: "0 0.1rem" }} />
+
+              {/* Actions */}
+              <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flexShrink: 0 }}
+                onClick={() => suggestForDates(week.map((d) => d.toISOString().split("T")[0]))}
+                title="Attribuer aléatoirement des plats sur les créneaux vides">
+                <Icon name="dice" size={13} /> Suggérer
+              </button>
+
+              <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flexShrink: 0 }}
+                onClick={() => { setWeekActionDate(weekDateStr); setWeekActionType("duplicate"); }}>
+                <Icon name="copy" size={13} /> Dupliquer
+              </button>
+
+              {/* Appliquer un modèle */}
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm"
+                  onClick={() => setShowWeekTemplates((v) => !v)}>
+                  <Icon name="calendar" size={13} /> Modèle
                 </button>
-
-                {/* Séparateur */}
-                <div style={{ width: "1px", height: "1.5rem", background: "var(--line)", flexShrink: 0, margin: "0 0.1rem" }} />
-
-                {/* Suggérer */}
-                <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flexShrink: 0 }}
-                  onClick={() => suggestForDates(week.map((d) => d.toISOString().split("T")[0]))}
-                  title="Attribuer aléatoirement des plats sur les créneaux vides">
-                  <Icon name="dice" size={13} /> Suggérer
-                </button>
-
-                {/* Dupliquer */}
-                <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flexShrink: 0 }}
-                  onClick={() => { setWeekActionDate(weekDateStr); setWeekActionType("duplicate"); }}>
-                  <Icon name="copy" size={13} /> Dupliquer
-                </button>
-
-                {/* Modèle — hors du scroll pour que le dropdown ne soit pas coupé */}
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm"
-                    onClick={() => setShowWeekTemplates((v) => !v)}>
-                    <Icon name="calendar" size={13} /> Modèle
-                  </button>
-                  {showWeekTemplates && (
-                    <div style={{
-                      position: "fixed",
-                      background: "var(--paper-raised)", border: "1px solid var(--line)",
-                      borderRadius: radius.md, boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                      zIndex: 500, minWidth: "200px", overflow: "hidden",
-                      marginTop: "4px",
-                    }}
-                    ref={(el) => {
-                      if (el) {
-                        const btn = el.previousSibling;
-                        if (btn) {
-                          const r = btn.getBoundingClientRect();
-                          el.style.top = (r.bottom + 4) + "px";
-                          el.style.left = r.left + "px";
-                        }
-                      }
-                    }}>
-                      {weekTemplates.length === 0 && (
-                        <p className="mp-small mp-text-faint" style={{ padding: "0.6rem 0.85rem" }}>Aucun modèle enregistré.</p>
-                      )}
-                      {weekTemplates.map((tpl) => (
-                        <button key={tpl.id} type="button"
-                          onClick={() => { setWeekActionDate(weekDateStr); setWeekActionType("apply-template"); setWeekActionTemplate(tpl); setShowWeekTemplates(false); }}
-                          style={{ display: "block", width: "100%", padding: "0.55rem 0.85rem", background: "transparent", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: "0.85rem", color: "var(--ink)" }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--clay-wash)"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                          {tpl.name}
-                        </button>
-                      ))}
-                      <button type="button"
-                        onClick={() => { setShowWeekTemplates(false); onNavigate("preferences"); }}
-                        style={{ display: "flex", alignItems: "center", gap: "0.4rem", width: "100%", padding: "0.55rem 0.85rem", background: "var(--paper-sunken)", border: "none", borderTop: weekTemplates.length > 0 ? "1px solid var(--line)" : "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", color: "var(--clay)", fontWeight: 600 }}
+                {showWeekTemplates && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 4px)", left: 0,
+                    background: "var(--paper-raised)", border: "1px solid var(--line)",
+                    borderRadius: radius.md, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                    zIndex: 200, minWidth: "200px", overflow: "hidden",
+                  }}>
+                    {weekTemplates.length === 0 && (
+                      <p className="mp-small mp-text-faint" style={{ padding: "0.6rem 0.85rem" }}>Aucun modèle enregistré.</p>
+                    )}
+                    {weekTemplates.map((tpl) => (
+                      <button key={tpl.id} type="button"
+                        onClick={() => { setWeekActionDate(weekDateStr); setWeekActionType("apply-template"); setWeekActionTemplate(tpl); setShowWeekTemplates(false); }}
+                        style={{ display: "block", width: "100%", padding: "0.55rem 0.85rem", background: "transparent", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: "0.85rem", color: "var(--ink)" }}
                         onMouseEnter={(e) => e.currentTarget.style.background = "var(--clay-wash)"}
-                        onMouseLeave={(e) => e.currentTarget.style.background = "var(--paper-sunken)"}>
-                        <Icon name="plus" size={13} /> Créer un modèle
+                        onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                        {tpl.name}
                       </button>
-                    </div>
-                  )}
-                </div>
+                    ))}
+                    <button type="button"
+                      onClick={() => { setShowWeekTemplates(false); onNavigate("preferences"); }}
+                      style={{ display: "flex", alignItems: "center", gap: "0.4rem", width: "100%", padding: "0.55rem 0.85rem", background: "var(--paper-sunken)", border: "none", borderTop: weekTemplates.length > 0 ? "1px solid var(--line)" : "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", color: "var(--clay)", fontWeight: 600 }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--clay-wash)"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "var(--paper-sunken)"}>
+                      <Icon name="plus" size={13} /> Créer un modèle
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Vider — toujours visible à droite */}
+              {/* Séparateur avant Vider */}
+              <div style={{ flex: 1 }} />
+
               <button type="button" className="mp-btn mp-btn-sm" style={{ flexShrink: 0, color: "var(--berry)", border: "1px solid var(--berry-wash)", background: "transparent" }}
                 onClick={() => { setWeekActionDate(weekDateStr); setWeekActionType("clear"); }}>
                 <Icon name="trash" size={13} /> Vider
@@ -2612,128 +2596,6 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
                   else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status });
                   setWeekEditingSlot(null);
                 }}
-              />
-            )}
-          </div>
-        );
-      })()}
-
-      {/* ========== VUE PERSONNALISÉE ========== */}
-      {viewMode === "custom" && customDays.length > 0 && (() => {
-        const customDateStr = customDays[0].toISOString().split("T")[0];
-        return (
-          <div>
-            {/* Barre d'actions — identique à la vue semaine */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.85rem", position: "relative" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", overflowX: "auto", flex: 1, paddingBottom: "2px" }}>
-                <button type="button" className={`mp-btn mp-btn-sm ${showBreakfast ? "mp-btn-primary" : "mp-btn-secondary"}`} onClick={toggleBreakfast} style={{ flexShrink: 0 }}>
-                  <Icon name="sunrise" size={13} /> PDJ
-                </button>
-                <div style={{ width: "1px", height: "1.5rem", background: "var(--line)", flexShrink: 0, margin: "0 0.1rem" }} />
-                <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flexShrink: 0 }}
-                  onClick={() => suggestForDates(customDays.map((d) => d.toISOString().split("T")[0]))}
-                  title="Attribuer des plats sur les créneaux vides futurs">
-                  <Icon name="dice" size={13} /> Suggérer
-                </button>
-                <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flexShrink: 0 }}
-                  onClick={() => { setWeekActionDate(customDateStr); setWeekActionType("duplicate"); }}>
-                  <Icon name="copy" size={13} /> Dupliquer
-                </button>
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" onClick={() => setShowWeekTemplates((v) => !v)}>
-                    <Icon name="calendar" size={13} /> Modèle
-                  </button>
-                  {showWeekTemplates && (
-                    <>
-                      <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setShowWeekTemplates(false)} />
-                      <div style={{ position: "fixed", background: "var(--paper-raised)", border: "1px solid var(--line)", borderRadius: radius.md, boxShadow: "0 8px 24px rgba(0,0,0,0.15)", zIndex: 500, minWidth: "200px", overflow: "hidden", marginTop: "4px" }}
-                        ref={(el) => { if (el) { const btn = el.previousSibling?.previousSibling; if (btn) { const r = btn.getBoundingClientRect(); el.style.top = (r.bottom+4)+"px"; el.style.left = r.left+"px"; } } }}>
-                        {weekTemplates.length === 0 && <p className="mp-small mp-text-faint" style={{ padding: "0.6rem 0.85rem" }}>Aucun modèle.</p>}
-                        {weekTemplates.map((tpl) => (
-                          <button key={tpl.id} type="button"
-                            onClick={() => { setWeekActionDate(customDateStr); setWeekActionType("apply-template"); setWeekActionTemplate(tpl); setShowWeekTemplates(false); }}
-                            style={{ display: "block", width: "100%", padding: "0.55rem 0.85rem", background: "transparent", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: "0.85rem", color: "var(--ink)" }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = "var(--clay-wash)"}
-                            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                            {tpl.name}
-                          </button>
-                        ))}
-                        <button type="button" onClick={() => { setShowWeekTemplates(false); onNavigate("preferences"); }}
-                          style={{ display: "flex", alignItems: "center", gap: "0.4rem", width: "100%", padding: "0.55rem 0.85rem", background: "var(--paper-sunken)", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", color: "var(--clay)", fontWeight: 600 }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--clay-wash)"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = "var(--paper-sunken)"}>
-                          <Icon name="plus" size={13} /> Créer un modèle
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-              <button type="button" className="mp-btn mp-btn-sm" style={{ flexShrink: 0, color: "var(--berry)", border: "1px solid var(--berry-wash)", background: "transparent" }}
-                onClick={() => { setWeekActionDate(customDateStr); setWeekActionType("clear"); }}>
-                <Icon name="trash" size={13} /> Vider
-              </button>
-            </div>
-
-            {/* Grille — même structure que la vue semaine */}
-            <div className="mp-week-grid" style={{ gridTemplateColumns: `2.75rem repeat(${visibleMealTypes.length}, 1fr)` }}>
-              {/* En-têtes repas */}
-              <div />
-              {visibleMealTypes.map((type) => {
-                const dotColor = type.color === "amber" ? "var(--amber)" : type.color === "clay" ? "var(--clay)" : "var(--sage)";
-                return (
-                  <div key={type.id} style={{ textAlign: "center", padding: "0.4rem 0.3rem", borderRadius: radius.sm, background: "var(--paper-sunken)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem" }}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-                    <span className="mp-week-meal-label-full mp-micro" style={{ fontWeight: 700, color: dotColor, textTransform: "uppercase" }}>{type.label}</span>
-                    <span className="mp-week-meal-label-short mp-micro" style={{ fontWeight: 700, color: dotColor, textTransform: "uppercase" }}>{type.short}</span>
-                  </div>
-                );
-              })}
-
-              {/* Lignes — une par jour de la plage */}
-              {customDays.map((date) => {
-                const dateStr = date.toISOString().split("T")[0];
-                const isToday = dateStr === todayStr();
-                const isPast = dateStr < todayStr();
-                const dow = date.getDay();
-                const dayLabel = DAYS_OF_WEEK[dow === 0 ? 6 : dow - 1];
-                return (
-                  <React.Fragment key={dateStr}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0.4rem 0.3rem", borderRadius: radius.sm, background: isToday ? "var(--clay)" : "var(--paper-sunken)", border: `1px solid ${isToday ? "var(--clay)" : "var(--line)"}`, minHeight: "4rem", opacity: isPast ? 0.55 : 1 }}>
-                      <span className="mp-week-day-label" style={{ color: isToday ? "rgba(255,255,255,0.75)" : "var(--ink-faint)" }}>{dayLabel}</span>
-                      <span className="mp-week-day-num" style={{ color: isToday ? "#fff" : "var(--ink)" }}>{date.getDate()}</span>
-                      <span className="mp-micro" style={{ color: isToday ? "rgba(255,255,255,0.6)" : "var(--ink-faint)" }}>{MONTHS[date.getMonth()].slice(0,3)}</span>
-                    </div>
-                    {visibleMealTypes.map((type) => {
-                      const meal = getMeal(dateStr, type.id);
-                      const status = meal?.status || "normal";
-                      const names = status === "normal" ? (meal?.recipeIds || []).map((id) => recipes.find((r) => r.id === id)?.name).filter(Boolean) : [];
-                      const dotColor = type.color === "amber" ? "var(--amber)" : type.color === "clay" ? "var(--clay)" : "var(--sage)";
-                      const washColor = type.color === "amber" ? "var(--amber-wash)" : type.color === "clay" ? "var(--clay-wash)" : "var(--sage-wash)";
-                      const bgColor = status === "restaurant" ? "var(--amber-wash)" : status === "skip" ? "var(--paper-sunken)" : names.length > 0 ? washColor : "var(--paper-raised)";
-                      const borderColor = status === "restaurant" ? "var(--amber)" : status === "skip" ? "var(--line)" : names.length > 0 ? dotColor : "var(--line)";
-                      return (
-                        <button key={type.id} type="button"
-                          onClick={() => !isPast && setWeekEditingSlot({ dateStr, type: type.id, mealId: meal?.id || null })}
-                          style={{ width: "100%", boxSizing: "border-box", background: bgColor, border: `1px solid ${borderColor}`, borderRadius: radius.sm, padding: "0.55rem 0.65rem", cursor: isPast ? "default" : "pointer", textAlign: "left", fontFamily: "inherit", transition: "background 100ms, border-color 100ms", minHeight: "4rem", opacity: isPast ? 0.55 : 1 }}>
-                          {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
-                          {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
-                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span>)}
-                        </button>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-
-            {/* Modales partagées avec la vue semaine */}
-            {weekEditingSlot && (
-              <RecipeSelectionModal recipes={recipes} meal={weekEditingSlot.mealId ? mealPlans.find((mp) => mp.id === weekEditingSlot.mealId) : null}
-                mealType={weekEditingSlot.type} date={weekEditingSlot.dateStr} recentRecipeIds={recentRecipeIds}
-                onClose={() => setWeekEditingSlot(null)}
-                onSave={(recipeIds) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, "normal"); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal" }); setWeekEditingSlot(null); }}
-                onSaveStatus={(status, recipeIds) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, status); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status }); setWeekEditingSlot(null); }}
               />
             )}
           </div>
@@ -3928,7 +3790,7 @@ const AddShoppingItemModal = ({ onClose, onSave }) => {
   return (
     <Modal onClose={onClose} width="360px">
       <ModalHeader title="Ajouter un article" onClose={onClose} />
-      <div>
+      <form onSubmit={handleSubmit}>
         <Field label="Article *">
           <input className="mp-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Tomates" required autoFocus />
         </Field>
@@ -3937,9 +3799,9 @@ const AddShoppingItemModal = ({ onClose, onSave }) => {
         </Field>
         <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end", marginTop: space.lg }}>
           <button type="button" className="mp-btn mp-btn-secondary" onClick={onClose}>Annuler</button>
-          <button type="button" className="mp-btn mp-btn-primary">Ajouter</button>
+          <button type="submit" className="mp-btn mp-btn-primary">Ajouter</button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 };
@@ -5050,16 +4912,17 @@ const UserAvatar = ({ name, size = "md" }) => {
 };
 
 const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, onJoinFamily, onLeaveFamily, onSetActiveFamily, onPromoteMember, onRemoveMember, onRegenerateCode }) => {
-  const hasNoFamily = families.length === 0;
   const [tab, setTab] = useState("create");
-  const [showJoinCreate, setShowJoinCreate] = useState(hasNoFamily);
+  const [showJoinCreate, setShowJoinCreate] = useState(false);
   const [familyName, setFamilyName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [copiedCode, setCopiedCode] = useState(null);
 
-  const activeFamily = families.find((f) => f.id === currentUser?.activeFamilyId) || families[0];
-  const currentMember = activeFamily?.members.find((m) => m.userId === currentUser?.id);
+  const activeFamily = families.find((f) => f.id === currentUser.activeFamilyId) || families[0];
+  if (!activeFamily) return <EmptyState title="Aucune famille" hint="Créez ou rejoignez une famille." />;
+
+  const currentMember = activeFamily.members.find((m) => m.userId === currentUser.id);
   const isAdmin = currentMember?.role === "admin";
 
   const copyCode = (code) => {
@@ -5069,14 +4932,14 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
   };
 
   const handleCreate = async (e) => {
-    e?.preventDefault();
+    e.preventDefault();
     if (!familyName.trim()) return;
     try { await onCreateFamily(familyName.trim()); setShowJoinCreate(false); setFamilyName(""); setError(""); }
     catch (err) { setError(err.message); }
   };
 
   const handleJoin = async (e) => {
-    e?.preventDefault();
+    e.preventDefault();
     try { await onJoinFamily(inviteCode.trim().toUpperCase()); setShowJoinCreate(false); setInviteCode(""); setError(""); }
     catch (err) { setError(err.message); }
   };
@@ -5102,33 +4965,21 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
           </div>
           {error && <div className="mp-auth-error" style={{ marginBottom: "0.75rem" }}>{error}</div>}
           {tab === "create" && (
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <input className="mp-input" style={{ flex: 1 }} value={familyName}
-                onChange={(e) => setFamilyName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && familyName.trim() && handleCreate(e)}
-                placeholder="Nom de la famille" autoFocus />
-              <button type="button" className="mp-btn mp-btn-primary mp-btn-sm"
-                disabled={!familyName.trim()} onClick={handleCreate}>Créer</button>
-            </div>
+            <form onSubmit={handleCreate} style={{ display: "flex", gap: "0.5rem" }}>
+              <input className="mp-input" style={{ flex: 1 }} value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Nom de la famille" required autoFocus />
+              <button type="submit" className="mp-btn mp-btn-primary mp-btn-sm" disabled={!familyName.trim()}>Créer</button>
+            </form>
           )}
           {tab === "join" && (
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            <form onSubmit={handleJoin} style={{ display: "flex", gap: "0.5rem" }}>
               <input className="mp-input" style={{ flex: 1, letterSpacing: "0.1em", fontWeight: 600 }}
                 value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && inviteCode.length >= 6 && handleJoin(e)}
-                placeholder="Code (6 car.)" maxLength={6} autoFocus />
-              <button type="button" className="mp-btn mp-btn-primary mp-btn-sm"
-                disabled={inviteCode.length < 6} onClick={handleJoin}>Rejoindre</button>
-            </div>
+                placeholder="Code (6 car.)" maxLength={6} required autoFocus />
+              <button type="submit" className="mp-btn mp-btn-primary mp-btn-sm" disabled={inviteCode.length < 6}>Rejoindre</button>
+            </form>
           )}
         </div>
       )}
-
-      {/* Aucune famille — message d'invitation */}
-      {!activeFamily && !showJoinCreate && (
-        <EmptyState title="Aucune famille" hint="Créez ou rejoignez une famille pour commencer à planifier vos repas." />
-      )}
-      {!activeFamily && showJoinCreate === false && null}
 
       {/* Sélecteur de famille active */}
       {families.length > 1 && (
@@ -5302,7 +5153,7 @@ const FamilySetupView = ({ currentUser, onCreateFamily, onJoinFamily }) => {
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async (e) => {
-    e?.preventDefault();
+    e.preventDefault();
     if (!familyName.trim()) return;
     setLoading(true);
     try { await onCreateFamily(familyName.trim()); }
@@ -5311,7 +5162,7 @@ const FamilySetupView = ({ currentUser, onCreateFamily, onJoinFamily }) => {
   };
 
   const handleJoin = async (e) => {
-    e?.preventDefault();
+    e.preventDefault();
     if (!inviteCode.trim()) return;
     setLoading(true);
     try { await onJoinFamily(inviteCode.trim().toUpperCase()); }
@@ -5328,6 +5179,7 @@ const FamilySetupView = ({ currentUser, onCreateFamily, onJoinFamily }) => {
           Le planning est lié à une famille. Créez la vôtre ou rejoignez-en une existante.
         </p>
 
+        {/* Onglets */}
         <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1.25rem" }}>
           {[["create", "Créer une famille"], ["join", "Rejoindre"]].map(([id, label]) => (
             <button key={id} type="button" onClick={() => { setTab(id); setError(""); }}
@@ -5341,35 +5193,31 @@ const FamilySetupView = ({ currentUser, onCreateFamily, onJoinFamily }) => {
         {error && <div className="mp-auth-error">{error}</div>}
 
         {tab === "create" && (
-          <div>
+          <form onSubmit={handleCreate}>
             <Field label="Nom de la famille">
               <input className="mp-input" value={familyName} onChange={(e) => setFamilyName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                placeholder="Ex : Famille Dupont" autoFocus />
+                placeholder="Ex : Famille Dupont" required autoFocus />
             </Field>
-            <button type="button" className="mp-btn mp-btn-primary"
-              style={{ width: "100%", justifyContent: "center" }} disabled={loading || !familyName.trim()}
-              onClick={handleCreate}>
+            <button type="submit" className="mp-btn mp-btn-primary"
+              style={{ width: "100%", justifyContent: "center" }} disabled={loading || !familyName.trim()}>
               {loading ? "Création…" : "Créer et continuer"}
             </button>
-          </div>
+          </form>
         )}
 
         {tab === "join" && (
-          <div>
+          <form onSubmit={handleJoin}>
             <Field label="Code d'invitation (6 caractères)">
               <input className="mp-input" value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && inviteCode.length >= 6 && handleJoin()}
-                placeholder="Ex : ABC123" maxLength={6} autoFocus
+                placeholder="Ex : ABC123" maxLength={6} required autoFocus
                 style={{ letterSpacing: "0.15em", fontWeight: 600, textAlign: "center", fontSize: "1.1rem" }} />
             </Field>
-            <button type="button" className="mp-btn mp-btn-primary"
-              style={{ width: "100%", justifyContent: "center" }} disabled={loading || inviteCode.length < 6}
-              onClick={handleJoin}>
+            <button type="submit" className="mp-btn mp-btn-primary"
+              style={{ width: "100%", justifyContent: "center" }} disabled={loading || inviteCode.length < 6}>
               {loading ? "Vérification…" : "Rejoindre la famille"}
             </button>
-          </div>
+          </form>
         )}
       </div>
     </div>
@@ -5491,7 +5339,7 @@ const LoginView = ({ onLogin, onGoRegister, onGoForgot }) => {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
-    e?.preventDefault();
+    e.preventDefault();
     setError("");
     setLoading(true);
     try {
@@ -5527,14 +5375,14 @@ const LoginView = ({ onLogin, onGoRegister, onGoForgot }) => {
               Compte de démonstration
             </p>
             <p className="mp-micro mp-text-soft">
-              {DEMO_USER.email} · {DEMO_PASSWORD}
+              {DEMO_USER.email} · {DEMO_USER.password}
             </p>
           </div>
           <button
             type="button"
             className="mp-btn mp-btn-sm"
             style={{ background: "var(--clay)", color: "#fff", border: "none", flexShrink: 0 }}
-            onClick={() => onLogin(DEMO_USER.email, DEMO_PASSWORD)}
+            onClick={() => onLogin(DEMO_USER.email, DEMO_USER.password)}
           >
             Essayer
           </button>
@@ -5542,7 +5390,7 @@ const LoginView = ({ onLogin, onGoRegister, onGoForgot }) => {
 
         {error && <div className="mp-auth-error">{error}</div>}
 
-        <div>
+        <form onSubmit={handleSubmit}>
           <Field label="Email">
             <input
               className="mp-input"
@@ -5567,15 +5415,14 @@ const LoginView = ({ onLogin, onGoRegister, onGoForgot }) => {
           </div>
 
           <button
-            type="button"
+            type="submit"
             className="mp-btn mp-btn-primary"
             style={{ width: "100%", justifyContent: "center" }}
-            onClick={handleSubmit}
             disabled={loading}
           >
             {loading ? "Connexion…" : "Se connecter"}
           </button>
-        </div>
+        </form>
 
         <p className="mp-auth-divider">
           Pas encore de compte ?{" "}
@@ -5599,10 +5446,9 @@ const RegisterView = ({ onRegister, onGoLogin }) => {
   const [loading, setLoading] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError("");
-    if (!name.trim()) { setError("Le prénom ou nom est requis."); return; }
-    if (!email.trim()) { setError("L'email est requis."); return; }
     if (password !== confirm) { setError("Les mots de passe ne correspondent pas."); return; }
     if (password.length < 8) { setError("Le mot de passe doit contenir au moins 8 caractères."); return; }
     if (!consentGeneral) { setError("Vous devez accepter la politique de confidentialité pour créer un compte."); return; }
@@ -5624,7 +5470,7 @@ const RegisterView = ({ onRegister, onGoLogin }) => {
 
         {error && <div className="mp-auth-error">{error}</div>}
 
-        <div>
+        <form onSubmit={handleSubmit}>
           <Field label="Prénom ou nom">
             <input className="mp-input" value={name} onChange={(e) => setName(e.target.value)}
               placeholder="Camille Dupont" required autoFocus />
@@ -5665,13 +5511,12 @@ const RegisterView = ({ onRegister, onGoLogin }) => {
             )}
           </div>
 
-          <button type="button" className="mp-btn mp-btn-primary"
+          <button type="submit" className="mp-btn mp-btn-primary"
             style={{ width: "100%", justifyContent: "center" }}
-            onClick={handleSubmit}
             disabled={loading || !consentGeneral}>
             {loading ? "Création…" : "Créer mon compte"}
           </button>
-        </div>
+        </form>
 
         <p className="mp-auth-divider">
           Déjà un compte ?{" "}
@@ -5689,15 +5534,12 @@ const ForgotPasswordView = ({ onGoLogin }) => {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!email.trim()) return;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
-    const { error } = await AuthService.resetPassword(email.trim());
-    if (error) {
-      setError(error);
-    } else {
-      setSent(true);
-    }
+    // TODO Phase 3 — remplacer par fetch("/api/auth/forgot-password", { method: "POST", body: { email } })
+    await new Promise((r) => setTimeout(r, 800));
+    setSent(true);
     setLoading(false);
   };
 
@@ -5725,7 +5567,7 @@ const ForgotPasswordView = ({ onGoLogin }) => {
             </button>
           </>
         ) : (
-          <div>
+          <form onSubmit={handleSubmit}>
             <Field label="Email">
               <input
                 className="mp-input"
@@ -5738,15 +5580,14 @@ const ForgotPasswordView = ({ onGoLogin }) => {
               />
             </Field>
             <button
-              type="button"
+              type="submit"
               className="mp-btn mp-btn-primary"
               style={{ width: "100%", justifyContent: "center" }}
-              onClick={handleSubmit}
-              disabled={loading || !email.trim()}
+              disabled={loading}
             >
               {loading ? "Envoi…" : "Envoyer le lien"}
             </button>
-          </div>
+          </form>
         )}
 
         {!sent && (
@@ -5772,7 +5613,8 @@ const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave }) => {
   const [date, setDate] = useState(todayStr());
   const [mealType, setMealType] = useState("lunch");
 
-  const handleNextStep = () => {
+  const handleNextStep = (e) => {
+    e.preventDefault();
     setStep(2);
   };
 
@@ -5793,7 +5635,7 @@ const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave }) => {
   return (
     <Modal onClose={onClose} width="360px">
       <ModalHeader title="Planifier un repas" onClose={onClose} />
-      <div>
+      <form onSubmit={handleNextStep}>
         <Field label="Date">
           <input
             className="mp-input"
@@ -5820,11 +5662,11 @@ const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave }) => {
         </Field>
         <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end", marginTop: space.lg }}>
           <button type="button" className="mp-btn mp-btn-secondary" onClick={onClose}>Annuler</button>
-          <button type="button" className="mp-btn mp-btn-primary">
+          <button type="submit" className="mp-btn mp-btn-primary">
             Choisir les recettes <Icon name="chevronRight" size={14} />
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 };
@@ -5833,48 +5675,35 @@ const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave }) => {
 // APP SHELL
 // ============================================================
 
-// ============================================================
-// TYPES
-// ============================================================
-
-/**
- * User — profil utilisateur côté front.
- * Toujours sans mot de passe. Swappable avec un profil Supabase.
- */
-type AppUser = {
-  id: string;
-  name: string;
-  email: string;
-  activeFamilyId: string | null;
-  consentGeneral?: boolean;
-  consentSensitive?: boolean;
-  consentDate?: string;
-  preferences?: any[];
-  allergies?: any[];
-  dislikes?: any[];
-  diets?: string[];
-  rules?: any[];
-};
-
-type AuthResult = { user: AppUser | null; error: string | null };
-
-// ============================================================
-// STORAGE — couche de persistance locale
-// ============================================================
-
 const STORAGE_KEYS = {
-  recipes:         "mealPlanner_recipes",
-  mealPlans:       "mealPlanner_mealPlans",
-  shoppingList:    "mealPlanner_shoppingList",
-  ingredients:     "mealPlanner_ingredients",
-  darkMode:        "mealPlanner_darkMode",
-  weekTemplates:   "mealPlanner_weekTemplates",
-  currentUser:     "mealPlanner_currentUser",
+  recipes: "mealPlanner_recipes",
+  mealPlans: "mealPlanner_mealPlans",
+  shoppingList: "mealPlanner_shoppingList",
+  ingredients: "mealPlanner_ingredients",
+  darkMode: "mealPlanner_darkMode",
+  weekTemplates: "mealPlanner_weekTemplates",
+  currentUser: "mealPlanner_currentUser",
   registeredUsers: "mealPlanner_registeredUsers",
-  families:        "mealPlanner_families",
+  families: "mealPlanner_families",           // toutes les familles
 };
 
-const loadFromStorage = (key: string, fallback: any) => {
+// Compte de démonstration — toujours disponible
+const DEMO_USER = { id: "demo", name: "Famille Demo", email: "demo@carnet.app", password: "demo1234",
+  activeFamilyId: "demo-family", preferences: [], allergies: [] };
+
+// Famille de démonstration
+const DEMO_FAMILY = {
+  id: "demo-family",
+  name: "Famille Demo",
+  inviteCode: "DEMO01",
+  members: [{ userId: "demo", userName: "Famille Demo", userEmail: "demo@carnet.app", role: "admin" }],
+};
+
+// Génère un code d'invitation à 6 caractères
+const generateInviteCode = () =>
+  Math.random().toString(36).substring(2, 8).toUpperCase();
+
+const loadFromStorage = (key, fallback) => {
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
@@ -5883,298 +5712,19 @@ const loadFromStorage = (key: string, fallback: any) => {
   }
 };
 
-const saveToStorage = (key: string, value: any) => {
+const saveToStorage = (key, value) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch { /* quota ou mode privé — ignoré */ }
-};
-
-// ============================================================
-// COMPTE DE DÉMONSTRATION
-// ============================================================
-
-const DEMO_USER: AppUser = {
-  id: "demo",
-  name: "Famille Demo",
-  email: "demo@carnet.app",
-  activeFamilyId: "demo-family",
-  preferences: [],
-  allergies: [],
-  dislikes: [],
-  diets: [],
-  rules: [],
-};
-
-// Mot de passe demo exposé uniquement dans LoginView
-const DEMO_PASSWORD = "demo1234";
-
-const DEMO_FAMILY = {
-  id: "demo-family",
-  name: "Famille Demo",
-  inviteCode: "DEMO01",
-  members: [{ userId: "demo", userName: "Famille Demo", userEmail: "demo@carnet.app", role: "admin" }],
-};
-
-const generateInviteCode = () =>
-  Math.random().toString(36).substring(2, 8).toUpperCase();
-
-// ============================================================
-// AUTH SERVICE — swappable localStorage ↔ Supabase
-// ============================================================
-//
-// Interface publique :
-//   AuthService.signIn(email, password)  → Promise<AuthResult>
-//   AuthService.signUp(name, email, password, consents) → Promise<AuthResult>
-//   AuthService.signOut()                → void
-//   AuthService.getSession()             → AppUser | null
-//   AuthService.onAuthChange(cb)         → () => void (unsubscribe)
-//
-// Pour migrer vers Supabase : remplacer le corps de chaque méthode.
-// L'interface reste identique — App ne change pas d'une ligne.
-// ============================================================
-
-// ============================================================
-// CLIENT SUPABASE
-// ============================================================
-// Chargé depuis CDN — pas de npm nécessaire pour le fichier unique
-// À remplacer par import { createClient } from '@supabase/supabase-js' lors du split
-
-declare const supabase: any; // sera initialisé ci-dessous via le script CDN
-
-const SUPABASE_URL  = "https://wdctmgcfinspgwvkwaii.supabase.co";
-const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkY3RtZ2NmaW5zcGd3dmt3YWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxOTUyNTcsImV4cCI6MjA5Nzc3MTI1N30._38LzpOx59YtmZudZ7ly7oSwJ83Uh9sNfLirqdef_t0";
-
-// Initialisation du client (fonctionne aussi bien en browser qu'en SSR)
-let _supabase: any = null;
-const getSupabase = () => {
-  if (_supabase) return _supabase;
-  if (typeof window !== "undefined" && (window as any).supabase) {
-    _supabase = (window as any).supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  } catch {
+    // localStorage indisponible (mode privé, quota, etc.) — on ignore silencieusement
   }
-  return _supabase;
 };
-
-// ============================================================
-// AUTH SERVICE — Supabase
-// ============================================================
-
-type AuthChangeCallback = (user: AppUser | null) => void;
-
-// Convertit un profil Supabase en AppUser front
-const profileToAppUser = (session: any, profile: any): AppUser => ({
-  id: session.user.id,
-  name: profile?.name || session.user.email?.split("@")[0] || "",
-  email: session.user.email || "",
-  activeFamilyId: profile?.active_family_id || profile?.family_id || null,
-  consentGeneral:  profile?.consent_general  || false,
-  consentSensitive: profile?.consent_sensitive || false,
-  consentDate:     profile?.consent_date      || null,
-  preferences: [],
-  allergies:   [],
-  dislikes:    [],
-  diets:       [],
-  rules:       [],
-});
-
-// Charge le profil depuis public.profiles
-const fetchProfile = async (userId: string) => {
-  const sb = getSupabase();
-  if (!sb) return null;
-  const { data } = await sb
-    .from("profiles")
-    .select("*")
-    .eq("profile_id", userId)
-    .single();
-  return data;
-};
-
-const AuthService = (() => {
-  const listeners: AuthChangeCallback[] = [];
-  const notify = (user: AppUser | null) => listeners.forEach((cb) => cb(user));
-
-  // Abonnement interne au changement de session Supabase
-  let _unsubSupabase: (() => void) | null = null;
-  const initSupabaseListener = () => {
-    const sb = getSupabase();
-    if (!sb || _unsubSupabase) return;
-    const { data: { subscription } } = sb.auth.onAuthStateChange(
-      async (event: string, session: any) => {
-        if (!session) { notify(null); return; }
-        const profile = await fetchProfile(session.user.id);
-        notify(profileToAppUser(session, profile));
-      }
-    );
-    _unsubSupabase = () => subscription.unsubscribe();
-  };
-
-  return {
-    // ── Connexion ──────────────────────────────────────────
-    signIn: async (email: string, password: string): Promise<AuthResult> => {
-      // Compte démo — reste en localStorage
-      if (email.toLowerCase() === DEMO_USER.email && password === DEMO_PASSWORD) {
-        const user = { ...DEMO_USER };
-        saveToStorage(STORAGE_KEYS.currentUser, user);
-        notify(user);
-        return { user, error: null };
-      }
-      const sb = getSupabase();
-      if (!sb) return { user: null, error: "Client Supabase non initialisé." };
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) return { user: null, error: error.message };
-      const profile = await fetchProfile(data.user.id);
-      const user = profileToAppUser(data.session, profile);
-      return { user, error: null };
-    },
-
-    // ── Inscription ────────────────────────────────────────
-    signUp: async (
-      name: string,
-      email: string,
-      password: string,
-      consents: { consentGeneral: boolean; consentSensitive: boolean; consentDate: string }
-    ): Promise<AuthResult> => {
-      const sb = getSupabase();
-      if (!sb) return { user: null, error: "Client Supabase non initialisé." };
-      const { data, error } = await sb.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-            consent_general:   consents.consentGeneral,
-            consent_sensitive: consents.consentSensitive,
-            consent_date:      consents.consentDate,
-          },
-        },
-      });
-      if (error) return { user: null, error: error.message };
-      if (!data.session) {
-        // Supabase a envoyé un email de confirmation
-        return { user: null, error: "Un email de confirmation a été envoyé. Vérifiez votre boîte mail." };
-      }
-      const profile = await fetchProfile(data.user.id);
-      const user = profileToAppUser(data.session, profile);
-      return { user, error: null };
-    },
-
-    // ── Déconnexion ────────────────────────────────────────
-    signOut: async () => {
-      // Démo — nettoyage localStorage
-      saveToStorage(STORAGE_KEYS.currentUser, null);
-      const sb = getSupabase();
-      if (sb) await sb.auth.signOut();
-      notify(null);
-    },
-
-    // ── Session courante (synchrone au démarrage) ──────────
-    getSession: (): AppUser | null => {
-      // Au 1er rendu, on tente de récupérer la session Supabase de manière synchrone
-      // depuis le localStorage natif de Supabase (clé `sb-*-auth-token`)
-      try {
-        const sbKey = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
-        if (sbKey) {
-          const raw = JSON.parse(localStorage.getItem(sbKey) || "null");
-          if (raw?.user) {
-            return {
-              id: raw.user.id,
-              name: raw.user.user_metadata?.name || raw.user.email?.split("@")[0] || "",
-              email: raw.user.email || "",
-              activeFamilyId: null, // sera mis à jour par onAuthChange
-              preferences: [], allergies: [], dislikes: [], diets: [], rules: [],
-            };
-          }
-        }
-      } catch {}
-      // Fallback compte démo
-      return loadFromStorage(STORAGE_KEYS.currentUser, null);
-    },
-
-    // ── Mise à jour du profil ─────────────────────────────
-    updateProfile: async (userId: string, updates: Partial<AppUser>) => {
-      // Mise à jour démo en localStorage
-      if (userId === "demo") {
-        const current = loadFromStorage(STORAGE_KEYS.currentUser, null);
-        if (current) saveToStorage(STORAGE_KEYS.currentUser, { ...current, ...updates });
-        notify({ ...DEMO_USER, ...updates });
-        return;
-      }
-      const sb = getSupabase();
-      if (!sb) return;
-      // Mapper AppUser → colonnes Supabase
-      const dbUpdates: any = {};
-      if (updates.activeFamilyId !== undefined) dbUpdates.active_family_id = updates.activeFamilyId;
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (Object.keys(dbUpdates).length > 0) {
-        await sb.from("profiles").update(dbUpdates).eq("profile_id", userId);
-      }
-      // Mettre à jour l'état local via onAuthChange (déclenché automatiquement)
-      const session = await sb.auth.getSession();
-      if (session?.data?.session) {
-        const profile = await fetchProfile(userId);
-        notify(profileToAppUser(session.data.session, { ...profile, ...dbUpdates }));
-      }
-    },
-
-    // ── Suppression de compte ─────────────────────────────
-    deleteAccount: async (userId: string) => {
-      saveToStorage(STORAGE_KEYS.currentUser, null);
-      const sb = getSupabase();
-      if (sb) {
-        // Supprimer le profil (cascade RLS)
-        await sb.from("profiles").delete().eq("profile_id", userId);
-        await sb.auth.signOut();
-      }
-      notify(null);
-    },
-
-    // ── Mot de passe oublié ───────────────────────────────
-    resetPassword: async (email: string): Promise<{ error: string | null }> => {
-      const sb = getSupabase();
-      if (!sb) return { error: "Client Supabase non initialisé." };
-      const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}?reset=true`,
-      });
-      return { error: error?.message || null };
-    },
-
-    // ── Abonnement aux changements d'auth ─────────────────
-    onAuthChange: (cb: AuthChangeCallback): (() => void) => {
-      listeners.push(cb);
-      // Initialiser l'écouteur Supabase au premier abonnement
-      initSupabaseListener();
-      return () => {
-        const idx = listeners.indexOf(cb);
-        if (idx !== -1) listeners.splice(idx, 1);
-      };
-    },
-  };
-})();
 
 const App = () => {
   const [currentView, setCurrentView] = useState("calendar");
   const [darkMode, setDarkMode] = useState(() => loadFromStorage(STORAGE_KEYS.darkMode, false));
-
-  // ── Charger le SDK Supabase depuis CDN au montage ──────
-  useEffect(() => {
-    if (document.getElementById("supabase-cdn")) return;
-    const script = document.createElement("script");
-    script.id = "supabase-cdn";
-    script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js";
-    document.head.appendChild(script);
-  }, []);
-
-  // ── Auth — initialisé depuis AuthService, mis à jour via onAuthChange ──
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => AuthService.getSession());
+  const [currentUser, setCurrentUser] = useState(() => loadFromStorage(STORAGE_KEYS.currentUser, null));
   const [authScreen, setAuthScreen] = useState("login");
-
-  useEffect(() => {
-    // Abonnement aux changements d'auth (Supabase: remplacer par supabase.auth.onAuthStateChange)
-    const unsubscribe = AuthService.onAuthChange((user) => {
-      setCurrentUser(user);
-      if (!user) setAuthScreen("login");
-    });
-    return unsubscribe;
-  }, []);
   const [families, setFamilies] = useState(() => {
     const stored = loadFromStorage(STORAGE_KEYS.families, null);
     return stored || [DEMO_FAMILY];
@@ -6239,71 +5789,87 @@ const App = () => {
   useEffect(() => saveToStorage(STORAGE_KEYS.ingredients, ingredients), [ingredients]);
   useEffect(() => saveToStorage(STORAGE_KEYS.weekTemplates, weekTemplates), [weekTemplates]);
   useEffect(() => saveToStorage(STORAGE_KEYS.darkMode, darkMode), [darkMode]);
-  // Note: currentUser est persisté par AuthService, pas ici
+  useEffect(() => saveToStorage(STORAGE_KEYS.currentUser, currentUser), [currentUser]);
   useEffect(() => saveToStorage(STORAGE_KEYS.families, families), [families]);
 
-  // ── Auth — délègue à AuthService (swappable Supabase) ──
-  const handleLogin = async (email: string, password: string) => {
-    const { user, error } = await AuthService.signIn(email, password);
-    if (error) throw new Error(error);
-    // user est notifié via onAuthChange → setCurrentUser automatique
+  // ---- Auth ----
+  const handleLogin = async (email, password) => {
+    if (email.toLowerCase() === DEMO_USER.email && password === DEMO_USER.password) {
+      setCurrentUser({ ...DEMO_USER, password: undefined });
+      return;
+    }
+    const users = loadFromStorage(STORAGE_KEYS.registeredUsers, []);
+    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    if (!user || user.password !== password) throw new Error("Email ou mot de passe incorrect.");
+    const { password: _, ...safeUser } = user;
+    setCurrentUser(safeUser);
   };
 
-  const handleRegister = async (
-    name: string, email: string, password: string,
-    consents: { consentGeneral: boolean; consentSensitive: boolean; consentDate: string }
-  ) => {
-    const { user, error } = await AuthService.signUp(name, email, password, consents);
-    if (error) throw new Error(error);
+  const handleRegister = async (name, email, password, consents = {}) => {
+    const users = loadFromStorage(STORAGE_KEYS.registeredUsers, []);
+    if (users.some((u) => u.email.toLowerCase() === email.toLowerCase()))
+      throw new Error("Un compte existe déjà avec cet email.");
+    const newUser = {
+      id: Date.now().toString(), name, email, password,
+      activeFamilyId: null, preferences: [], allergies: [], dislikes: [], diets: [], rules: [],
+      consentGeneral: consents.consentGeneral || false,
+      consentSensitive: consents.consentSensitive || false,
+      consentDate: consents.consentDate || new Date().toISOString(),
+    };
+    saveToStorage(STORAGE_KEYS.registeredUsers, [...users, newUser]);
+    const { password: _, ...safeUser } = newUser;
+    setCurrentUser(safeUser);
   };
 
   const handleLogout = () => {
-    AuthService.signOut();
+    setCurrentUser(null);
+    saveToStorage(STORAGE_KEYS.currentUser, null);
     setAuthScreen("login");
   };
 
   // ---- Famille ----
-  const handleCreateFamily = async (name: string) => {
+  const handleCreateFamily = async (name) => {
     const newFamily = {
       id: Date.now().toString(),
       name,
       inviteCode: generateInviteCode(),
       members: [{ userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
     };
-    setFamilies((prev: any[]) => [...prev, newFamily]);
-    AuthService.updateProfile(currentUser.id, { activeFamilyId: newFamily.id });
+    setFamilies((prev) => [...prev, newFamily]);
+    setCurrentUser((u) => ({ ...u, activeFamilyId: newFamily.id }));
+    // Persister activeFamilyId dans registeredUsers
+    const users = loadFromStorage(STORAGE_KEYS.registeredUsers, []);
+    saveToStorage(STORAGE_KEYS.registeredUsers, users.map((u) => u.id === currentUser.id ? { ...u, activeFamilyId: newFamily.id } : u));
     showToast(`Famille « ${name} » créée`, "sage");
   };
 
-  const handleJoinFamily = async (code: string) => {
-    const allFamilies: any[] = loadFromStorage(STORAGE_KEYS.families, [DEMO_FAMILY]);
-    const allUnique = [...allFamilies];
-    if (!allUnique.some((f) => f.id === DEMO_FAMILY.id)) allUnique.push(DEMO_FAMILY);
-    const target = allUnique.find((f) => f.inviteCode === code);
+  const handleJoinFamily = async (code) => {
+    const allFamilies = loadFromStorage(STORAGE_KEYS.families, [DEMO_FAMILY]);
+    const target = [...allFamilies, DEMO_FAMILY].find((f) => f.inviteCode === code);
     if (!target) throw new Error("Code invalide ou famille introuvable.");
-    if (target.members.some((m: any) => m.userId === currentUser.id)) throw new Error("Vous êtes déjà membre de cette famille.");
+    if (target.members.some((m) => m.userId === currentUser.id)) throw new Error("Vous êtes déjà membre de cette famille.");
     const updated = { ...target, members: [...target.members, { userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "member" }] };
-    setFamilies((prev: any[]) => prev.some((f) => f.id === target.id) ? prev.map((f) => f.id === target.id ? updated : f) : [...prev, updated]);
-    AuthService.updateProfile(currentUser.id, { activeFamilyId: target.id });
+    setFamilies((prev) => prev.some((f) => f.id === target.id) ? prev.map((f) => f.id === target.id ? updated : f) : [...prev, updated]);
+    setCurrentUser((u) => ({ ...u, activeFamilyId: target.id }));
+    const users = loadFromStorage(STORAGE_KEYS.registeredUsers, []);
+    saveToStorage(STORAGE_KEYS.registeredUsers, users.map((u) => u.id === currentUser.id ? { ...u, activeFamilyId: target.id } : u));
     showToast(`Vous avez rejoint « ${target.name} »`, "sage");
   };
 
-  const handleSetActiveFamily = (familyId: string) => {
-    AuthService.updateProfile(currentUser.id, { activeFamilyId: familyId });
+  const handleSetActiveFamily = (familyId) => {
+    setCurrentUser((u) => ({ ...u, activeFamilyId: familyId }));
+    const users = loadFromStorage(STORAGE_KEYS.registeredUsers, []);
+    saveToStorage(STORAGE_KEYS.registeredUsers, users.map((u) => u.id === currentUser.id ? { ...u, activeFamilyId: familyId } : u));
   };
 
   const handleLeaveFamily = (familyId) => {
-    setFamilies((prev) => {
-      const updated = prev.map((f) => f.id === familyId
-        ? { ...f, members: f.members.filter((m) => m.userId !== currentUser.id) }
-        : f
-      );
-      // Recalculer la famille active depuis l'état mis à jour
-      const remaining = updated.filter((f) => f.id !== familyId && f.members.some((m) => m.userId === currentUser.id));
-      const newActive = remaining[0]?.id || null;
-      setCurrentUser((u) => ({ ...u, activeFamilyId: newActive }));
-      return updated;
-    });
+    setFamilies((prev) => prev.map((f) => f.id === familyId
+      ? { ...f, members: f.members.filter((m) => m.userId !== currentUser.id) }
+      : f
+    ));
+    const remaining = families.filter((f) => f.id !== familyId && f.members.some((m) => m.userId === currentUser.id));
+    const newActive = remaining[0]?.id || null;
+    setCurrentUser((u) => ({ ...u, activeFamilyId: newActive }));
     showToast("Vous avez quitté la famille", "sage");
   };
 
@@ -6486,18 +6052,17 @@ const App = () => {
     const targetMonday = new Date(targetMondayStr + "T12:00:00");
     const weekMeals = familyMealPlans.filter((mp) => getMondayOf(new Date(mp.date + "T12:00:00")).toISOString().split("T")[0] === monday.toISOString().split("T")[0]);
     if (weekMeals.length === 0) { showToast("Aucun repas à dupliquer", "berry"); return; }
-    const base = Date.now();
     setMealPlans((prev) => {
-      const additions = weekMeals.map((mp, idx) => {
+      const additions = weekMeals.map((mp) => {
         const offset = Math.round((new Date(mp.date + "T12:00:00") - monday) / 86400000);
         const newDate = new Date(targetMonday); newDate.setDate(targetMonday.getDate() + offset);
         const newDateStr = newDate.toISOString().split("T")[0];
-        if (prev.some((p) => p.date === newDateStr && p.type === mp.type && (p.recipeIds || []).length > 0)) return null;
-        return { id: `dup-${base}-${idx}`, date: newDateStr, type: mp.type, recipeIds: [...(mp.recipeIds || [])], status: mp.status || "normal", familyId: activeFamily?.id };
+        if (prev.some((p) => p.date === newDateStr && p.type === mp.type && (p.recipeIds||[]).length > 0)) return null;
+        return { id: `dup-${Date.now()}-${mp.id}`, date: newDateStr, type: mp.type, recipeIds: [...(mp.recipeIds||[])], familyId: activeFamily?.id };
       }).filter(Boolean);
       return [...prev, ...additions];
     });
-    showToast(`${weekMeals.length} repas dupliqué${weekMeals.length > 1 ? "s" : ""}`, "sage");
+    showToast(`${weekMeals.length} repas dupliqué${weekMeals.length>1?"s":""}`, "sage");
   };
 
   const handleClearWeek = (dateStr) => {
@@ -6509,22 +6074,26 @@ const App = () => {
     });
   };
 
-  const handleUpdateUserProfile = (updates: Partial<AppUser>) => {
-    if (!currentUser) return;
-    AuthService.updateProfile(currentUser.id, updates);
-    // setCurrentUser mis à jour automatiquement via onAuthChange
+  const handleUpdateUserProfile = (updates) => {
+    setCurrentUser((u) => ({ ...u, ...updates }));
+    const users = loadFromStorage(STORAGE_KEYS.registeredUsers, []);
+    saveToStorage(STORAGE_KEYS.registeredUsers, users.map((u) =>
+      u.id === currentUser.id ? { ...u, ...updates } : u
+    ));
   };
 
   const handleDeleteAccount = () => {
-    if (!currentUser) return;
-    // Supprimer les données liées
-    setRecipes((prev) => prev.filter((r: any) => r.createdBy !== currentUser.id));
-    setMealPlans((prev) => prev.filter((mp: any) => mp.familyId !== activeFamily?.id));
-    setFamilies((prev) => prev
-      .map((f: any) => ({ ...f, members: f.members.filter((m: any) => m.userId !== currentUser.id) }))
-      .filter((f: any) => f.members.length > 0)
-    );
-    AuthService.deleteAccount(currentUser.id);
+    // Supprimer le compte des utilisateurs enregistrés
+    const users = loadFromStorage(STORAGE_KEYS.registeredUsers, []);
+    saveToStorage(STORAGE_KEYS.registeredUsers, users.filter((u) => u.id !== currentUser.id));
+    // Supprimer les données personnelles
+    setRecipes((prev) => prev.filter((r) => r.createdBy !== currentUser.id));
+    setMealPlans((prev) => prev.filter((mp) => mp.familyId !== activeFamily?.id));
+    // Retirer l'utilisateur de toutes les familles
+    setFamilies((prev) => prev.map((f) => ({
+      ...f, members: f.members.filter((m) => m.userId !== currentUser.id)
+    })).filter((f) => f.members.length > 0));
+    handleLogout();
   };
 
   const viewProps = {
@@ -6569,7 +6138,7 @@ const App = () => {
       {currentUser && !needsFamilySetup && (
         <>
           <div className="mp-shell">
-            <Sidebar currentView={currentView} onNavigate={setCurrentView} darkMode={darkMode} onToggleDark={() => setDarkMode((v) => !v)} currentUser={currentUser} onLogout={handleLogout} families={userFamilies} activeFamily={activeFamily} onSetActiveFamily={handleSetActiveFamily} />
+            <Sidebar currentView={currentView} onNavigate={setCurrentView} darkMode={darkMode} onToggleDark={() => setDarkMode((v) => !v)} currentUser={currentUser} onLogout={handleLogout} />
             <main className="mp-main">{renderView()}</main>
           </div>
 
