@@ -1737,7 +1737,7 @@ const Sidebar = ({ currentView, onNavigate, darkMode, onToggleDark, currentUser,
   return (
     <>
       {/* Desktop sidebar */}
-      <nav className="mp-hide-mobile" style={{ width: "210px", flexShrink: 0, borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", background: "var(--paper-raised)" }}>
+      <nav className="mp-hide-mobile" style={{ width: "210px", flexShrink: 0, alignSelf: "flex-start", position: "sticky", top: 0, height: "100vh", overflowY: "auto", borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", background: "var(--paper-raised)" }}>
         <div style={{ padding: "1.1rem 1rem 0.85rem", borderBottom: "1px solid var(--line)" }}>
           <div style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: activeFamily ? "0.75rem" : 0 }} onClick={() => onNavigate("calendar")}>
             <LogoMark />
