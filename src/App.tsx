@@ -7044,23 +7044,53 @@ const App = () => {
   };
 
   const handleJoinFamily = async (code: string) => {
-    const allFamilies: any[] = loadFromStorage(STORAGE_KEYS.families, [DEMO_FAMILY]);
-    const allUnique = [...allFamilies];
-    if (!allUnique.some((f) => f.id === DEMO_FAMILY.id)) allUnique.push(DEMO_FAMILY);
-    const target = allUnique.find((f) => f.inviteCode === code);
-    if (!target) throw new Error("Code invalide ou famille introuvable.");
-    if (target.members.some((m: any) => m.userId === currentUser.id)) throw new Error("Vous êtes déjà membre de cette famille.");
-    const updated = { ...target, members: [...target.members, { userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "member" }] };
-    setFamilies((prev: any[]) => prev.some((f) => f.id === target.id) ? prev.map((f) => f.id === target.id ? updated : f) : [...prev, updated]);
-    AuthService.updateProfile(currentUser.id, { activeFamilyId: target.id });
-    showToast(`Vous avez rejoint « ${target.name} »`, "sage");
+    if (currentUser.id === "demo") {
+      const allFamilies: any[] = loadFromStorage(STORAGE_KEYS.families, [DEMO_FAMILY]);
+      const allUnique = [...allFamilies];
+      if (!allUnique.some((f) => f.id === DEMO_FAMILY.id)) allUnique.push(DEMO_FAMILY);
+      const target = allUnique.find((f) => f.inviteCode === code);
+      if (!target) throw new Error("Code invalide ou famille introuvable.");
+      if (target.members.some((m: any) => m.userId === currentUser.id)) throw new Error("Vous êtes déjà membre de cette famille.");
+      const updated = { ...target, members: [...target.members, { userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "member" }] };
+      setFamilies((prev: any[]) => prev.some((f) => f.id === target.id) ? prev.map((f) => f.id === target.id ? updated : f) : [...prev, updated]);
+      AuthService.updateProfile(currentUser.id, { activeFamilyId: target.id });
+      showToast(`Vous avez rejoint « ${target.name} »`, "sage");
+      return;
+    }
+
+    const sb = await getSupabase();
+    if (!sb) throw new Error("Connexion à la base de données indisponible.");
+
+    const { data, error } = await sb.rpc("join_family_by_code", { p_invite_code: code });
+    if (error) {
+      const messages: Record<string, string> = {
+        invalid_code: "Code invalide ou famille introuvable.",
+        already_member: "Vous êtes déjà membre de cette famille.",
+      };
+      throw new Error(messages[error.message] || error.message);
+    }
+    const joined = data?.[0];
+
+    const loaded = await fetchFamiliesForUser(currentUser);
+    const loadedIds = new Set(loaded.map((f) => f.id));
+    setFamilies((prev: any[]) => [...prev.filter((f) => !loadedIds.has(f.id)), ...loaded]);
+
+    await sb.from("profiles").update({ active_family_id: joined?.family_id }).eq("profile_id", currentUser.id);
+    setCurrentUser((u: any) => u && { ...u, activeFamilyId: joined?.family_id });
+    showToast(`Vous avez rejoint « ${joined?.name} »`, "sage");
   };
 
   const handleSetActiveFamily = (familyId: string) => {
     AuthService.updateProfile(currentUser.id, { activeFamilyId: familyId });
   };
 
-  const handleLeaveFamily = (familyId) => {
+  const handleLeaveFamily = async (familyId) => {
+    if (currentUser.id !== "demo") {
+      const sb = await getSupabase();
+      if (!sb) { showToast("Connexion à la base indisponible", "clay"); return; }
+      const { error } = await sb.from("family_members").delete().eq("family_id", familyId).eq("profile_id", currentUser.id);
+      if (error) { showToast("Erreur lors du départ de la famille", "clay"); return; }
+    }
     setFamilies((prev) => {
       const updated = prev.map((f) => f.id === familyId
         ? { ...f, members: f.members.filter((m) => m.userId !== currentUser.id) }
