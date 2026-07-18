@@ -6294,6 +6294,68 @@ const fetchIngredientCategoryMap = async (): Promise<Record<string, number>> => 
   return _ingredientCategoryMap;
 };
 
+// ---- Régimes alimentaires (mapping short_name -> id, mis en cache) ----
+let _dietMap: Record<string, number> | null = null;
+const fetchDietMap = async (): Promise<Record<string, number>> => {
+  if (_dietMap) return _dietMap;
+  const sb = await getSupabase();
+  if (!sb) return {};
+  const { data, error } = await sb.from("diets").select("id, short_name");
+  if (error || !data) return {};
+  _dietMap = Object.fromEntries(data.map((d: any) => [d.short_name, d.id]));
+  return _dietMap;
+};
+
+// ---- Préférences perso (régimes, allergies, aliments non appréciés) ----
+const fetchUserPreferences = async (profileId: string): Promise<{ diets: string[]; allergies: any[]; dislikes: any[] }> => {
+  const sb = await getSupabase();
+  if (!sb) return { diets: [], allergies: [], dislikes: [] };
+  const [{ data: dietRows }, { data: restrictionRows }] = await Promise.all([
+    sb.from("profile_diets").select("diets(short_name)").eq("profile_id", profileId),
+    sb.from("profile_food_restrictions")
+      .select("restriction_type, item_type, ingredient_id, ingredient_categories(short_name)")
+      .eq("profile_id", profileId),
+  ]);
+
+  const diets = (dietRows || []).map((d: any) => d.diets?.short_name).filter(Boolean);
+  const allergies: any[] = [];
+  const dislikes: any[] = [];
+  (restrictionRows || []).forEach((r: any) => {
+    const item = r.item_type === "ingredient"
+      ? { type: "ingredient", id: String(r.ingredient_id) }
+      : { type: "category", id: r.ingredient_categories?.short_name };
+    if (!item.id) return;
+    (r.restriction_type === "allergy" ? allergies : dislikes).push(item);
+  });
+  return { diets, allergies, dislikes };
+};
+
+// Remplace entièrement les allergies OU les aliments non appréciés d'un profil.
+const saveFoodRestrictions = async (sb: any, profileId: string, restrictionType: "allergy" | "dislike", items: any[]) => {
+  await sb.from("profile_food_restrictions").delete().eq("profile_id", profileId).eq("restriction_type", restrictionType);
+  if (items.length === 0) return;
+  const categoryMap = await fetchIngredientCategoryMap();
+  const rows = items
+    .map((item: any) => ({
+      profile_id: profileId,
+      restriction_type: restrictionType,
+      item_type: item.type,
+      ingredient_id: item.type === "ingredient" ? Number(item.id) : null,
+      ingredient_category_id: item.type === "category" ? (categoryMap[item.id] ?? null) : null,
+    }))
+    .filter((row: any) => row.ingredient_id || row.ingredient_category_id);
+  if (rows.length > 0) await sb.from("profile_food_restrictions").insert(rows);
+};
+
+// Remplace entièrement les régimes alimentaires d'un profil.
+const saveDiets = async (sb: any, profileId: string, diets: string[]) => {
+  await sb.from("profile_diets").delete().eq("profile_id", profileId);
+  if (diets.length === 0) return;
+  const dietMap = await fetchDietMap();
+  const rows = diets.map((d: string) => ({ profile_id: profileId, diet_id: dietMap[d] })).filter((r: any) => r.diet_id);
+  if (rows.length > 0) await sb.from("profile_diets").insert(rows);
+};
+
 // ---- Recettes (globales + privées + familiales + partagées, filtrées par RLS) ----
 const fetchRecipesForUser = async (): Promise<any[]> => {
   const sb = await getSupabase();
@@ -6812,6 +6874,17 @@ const App = () => {
     if (!currentUser || isDemo) return;
     let cancelled = false;
     (async () => { const loaded = await fetchIngredients(); if (!cancelled) setIngredients(loaded); })();
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
+
+  // ── Chargement des préférences perso (régimes, allergies, aliments non appréciés) ──
+  useEffect(() => {
+    if (!currentUser || isDemo) return;
+    let cancelled = false;
+    (async () => {
+      const prefs = await fetchUserPreferences(currentUser.id);
+      if (!cancelled) setCurrentUser((u) => u && { ...u, ...prefs });
+    })();
     return () => { cancelled = true; };
   }, [currentUser?.id]);
 
@@ -7449,10 +7522,35 @@ const App = () => {
     } catch { showToast("Erreur lors de la suppression de la semaine", "clay"); }
   };
 
-  const handleUpdateUserProfile = (updates: Partial<AppUser>) => {
+  const handleUpdateUserProfile = async (updates: Partial<AppUser>) => {
     if (!currentUser) return;
-    AuthService.updateProfile(currentUser.id, updates);
-    // setCurrentUser mis à jour automatiquement via onAuthChange
+    const { diets, allergies, dislikes, ...profileUpdates } = updates as any;
+
+    if (isDemo) {
+      AuthService.updateProfile(currentUser.id, updates);
+      return;
+    }
+
+    try {
+      const sb = await getSupabase();
+      if (sb && diets !== undefined) {
+        await saveDiets(sb, currentUser.id, diets);
+        setCurrentUser((u) => u && { ...u, diets });
+      }
+      if (sb && allergies !== undefined) {
+        await saveFoodRestrictions(sb, currentUser.id, "allergy", allergies);
+        setCurrentUser((u) => u && { ...u, allergies });
+      }
+      if (sb && dislikes !== undefined) {
+        await saveFoodRestrictions(sb, currentUser.id, "dislike", dislikes);
+        setCurrentUser((u) => u && { ...u, dislikes });
+      }
+    } catch { showToast("Erreur lors de la mise à jour des préférences", "clay"); }
+
+    if (Object.keys(profileUpdates).length > 0) {
+      AuthService.updateProfile(currentUser.id, profileUpdates);
+      // setCurrentUser mis à jour automatiquement via onAuthChange pour ces champs
+    }
   };
 
   const handleDeleteAccount = () => {
