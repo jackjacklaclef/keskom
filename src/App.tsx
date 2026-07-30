@@ -6914,6 +6914,45 @@ const App = () => {
     return () => { cancelled = true; };
   }, [currentUser?.id, isDemo, activeFamily?.id]);
 
+  // ── Synchronisation temps réel du planning (Realtime) — comptes non-démo ──
+  // Si un autre membre de la famille modifie le planning, on le voit sans recharger.
+  // Refetch complet plutôt qu'un patch fin : plus simple et fiable, le volume de
+  // données d'un planning familial est trop faible pour que ça coûte quoi que ce soit.
+  useEffect(() => {
+    if (!currentUser || isDemo || !activeFamily?.id) return;
+    let cancelled = false;
+    let channel: any = null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const refetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const meals = await fetchMealPlansForFamily(activeFamily.id);
+        if (!cancelled) setMealPlans(meals);
+      }, 300);
+    };
+
+    (async () => {
+      const sb = await getSupabase();
+      if (!sb || cancelled) return;
+      channel = sb
+        .channel(`meal-plans-${activeFamily.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "meal_plans", filter: `family_id=eq.${activeFamily.id}` }, refetch)
+        // meal_plan_meals / meal_plan_meal_recipes n'ont pas de family_id direct (via
+        // meal_plan_id / meal_plan_meal_id) : pas de filtre possible côté Realtime,
+        // mais RLS restreint déjà ce que ce client reçoit à sa propre famille.
+        .on("postgres_changes", { event: "*", schema: "public", table: "meal_plan_meals" }, refetch)
+        .on("postgres_changes", { event: "*", schema: "public", table: "meal_plan_meal_recipes" }, refetch)
+        .subscribe();
+    })();
+
+    return () => {
+      cancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (channel) channel.unsubscribe();
+    };
+  }, [currentUser?.id, isDemo, activeFamily?.id]);
+
   // ── Auth — délègue à AuthService (swappable Supabase) ──
   const handleLogin = async (email: string, password: string) => {
     const { user, error } = await AuthService.signIn(email, password);
