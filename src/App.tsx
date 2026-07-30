@@ -5127,12 +5127,14 @@ const PrivacyLink = ({ onClick }) => (
 // ACCOUNT VIEW
 // ============================================================
 
-const AccountView = ({ currentUser, onLogout, onDeleteAccount, onNavigate }) => {
+const AccountView = ({ currentUser, activeFamily, onLogout, onDeleteAccount, onNavigate, onSetMyAvatar }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const isDemo = currentUser.id === "demo";
+  const myAvatarEmoji = activeFamily?.members.find((m) => m.userId === currentUser.id)?.avatarEmoji;
 
   return (
     <div>
@@ -5142,21 +5144,39 @@ const AccountView = ({ currentUser, onLogout, onDeleteAccount, onNavigate }) => 
 
       {/* Carte profil */}
       <div className="mp-card" style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: space.xl, flexWrap: "wrap" }}>
-        <div style={{
-          width: "4rem", height: "4rem", borderRadius: "50%",
+        <button type="button" onClick={() => setShowAvatarPicker(true)} title="Changer d'avatar" style={{
+          position: "relative", width: "4rem", height: "4rem", borderRadius: "50%",
           background: "var(--clay-wash)", border: "2px solid var(--clay-soft)",
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          cursor: "pointer", padding: 0,
         }}>
-          <span style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--clay)", fontFamily: "'Fraunces', Georgia, serif" }}>
-            {currentUser.name?.charAt(0).toUpperCase()}
+          {myAvatarEmoji
+            ? <span style={{ fontSize: "2rem", lineHeight: 1 }}>{myAvatarEmoji}</span>
+            : <span style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--clay)", fontFamily: "'Fraunces', Georgia, serif" }}>
+                {currentUser.name?.charAt(0).toUpperCase()}
+              </span>}
+          <span style={{
+            position: "absolute", bottom: "-2px", right: "-2px", width: "1.35rem", height: "1.35rem", borderRadius: "50%",
+            background: "var(--ink)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+            border: "2px solid var(--paper-raised)",
+          }}>
+            <Icon name="edit" size={10} />
           </span>
-        </div>
+        </button>
         <div style={{ flex: 1 }}>
           <h2 className="mp-h2" style={{ marginBottom: "0.2rem" }}>{currentUser.name}</h2>
           <p className="mp-small mp-text-soft">{currentUser.email}</p>
           {isDemo && <span className="mp-badge mp-badge-amber" style={{ marginTop: "0.4rem" }}>Compte de démonstration</span>}
         </div>
       </div>
+
+      {showAvatarPicker && (
+        <EmojiAvatarPicker
+          current={myAvatarEmoji}
+          onClose={() => setShowAvatarPicker(false)}
+          onSave={(emoji) => { onSetMyAvatar(emoji); setShowAvatarPicker(false); }}
+        />
+      )}
 
       {/* Informations */}
       <div className="mp-card" style={{ marginBottom: space.xl }}>
@@ -7903,7 +7923,7 @@ const App = () => {
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
     preferences: { currentUser, ingredients, weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate, onUpdateUserProfile: handleUpdateUserProfile },
     family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember, onSetMyAvatar: handleSetMyAvatar, onSetMemberAvatar: handleSetMemberAvatar },
-    account: { currentUser, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onNavigate: setCurrentView },
+    account: { currentUser, activeFamily, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onNavigate: setCurrentView, onSetMyAvatar: handleSetMyAvatar },
   };
 
   const renderView = () => {
