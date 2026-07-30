@@ -2015,7 +2015,9 @@ const AttendeeAvatarStack = ({ attendeeIds, familyMembers = [], max = 4 }) => {
           border: "1.5px solid var(--paper-raised)", display: "flex", alignItems: "center", justifyContent: "center",
           marginLeft: i === 0 ? 0 : "-0.35rem", flexShrink: 0, zIndex: shown.length - i,
         }}>
-          <span style={{ fontSize: "0.55rem", fontWeight: 700, color: "var(--clay)" }}>{m.userName?.charAt(0).toUpperCase()}</span>
+          {m.avatarEmoji
+            ? <span style={{ fontSize: "0.62rem", lineHeight: 1 }}>{m.avatarEmoji}</span>
+            : <span style={{ fontSize: "0.55rem", fontWeight: 700, color: "var(--clay)" }}>{m.userName?.charAt(0).toUpperCase()}</span>}
         </div>
       ))}
       {extra > 0 && <span className="mp-micro mp-text-faint" style={{ marginLeft: "0.25rem" }}>+{extra}</span>}
@@ -5276,17 +5278,71 @@ const AccountView = ({ currentUser, onLogout, onDeleteAccount, onNavigate }) => 
 // ============================================================
 
 // Avatar utilisateur réutilisable
-const UserAvatar = ({ name, size = "md" }) => {
+const UserAvatar = ({ name, size = "md", avatarEmoji, onClick }) => {
   const sz = size === "sm" ? "1.75rem" : "2.25rem";
   const fs = size === "sm" ? "0.7rem" : "0.8rem";
+  const emojiFs = size === "sm" ? "1rem" : "1.2rem";
   return (
-    <div style={{ width: sz, height: sz, borderRadius: "50%", background: "var(--clay-wash)", border: "1px solid var(--clay-soft)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      <span style={{ fontSize: fs, fontWeight: 700, color: "var(--clay)" }}>{name?.charAt(0).toUpperCase()}</span>
+    <div onClick={onClick} style={{
+      width: sz, height: sz, borderRadius: "50%", background: "var(--clay-wash)", border: "1px solid var(--clay-soft)",
+      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      cursor: onClick ? "pointer" : "default",
+    }}>
+      {avatarEmoji
+        ? <span style={{ fontSize: emojiFs, lineHeight: 1 }}>{avatarEmoji}</span>
+        : <span style={{ fontSize: fs, fontWeight: 700, color: "var(--clay)" }}>{name?.charAt(0).toUpperCase()}</span>}
     </div>
   );
 };
 
-const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, onJoinFamily, onLeaveFamily, onSetActiveFamily, onPromoteMember, onRemoveMember, onRegenerateCode, onAddMemberByEmail, onAddLocalMember }) => {
+// Avatars gourmands — groupés par famille d'aliments, mêmes emojis validés dans la maquette.
+const AVATAR_EMOJI_GROUPS = [
+  { label: "Fruits", emojis: [
+    ["🍓", "Fraise"], ["🥑", "Avocat"], ["🍋", "Citron"], ["🍉", "Pastèque"], ["🍎", "Pomme"], ["🍊", "Orange"],
+    ["🍌", "Banane"], ["🍇", "Raisin"], ["🍑", "Pêche"], ["🍒", "Cerise"], ["🍍", "Ananas"], ["🥭", "Mangue"],
+  ]},
+  { label: "Légumes", emojis: [
+    ["🍅", "Tomate"], ["🥕", "Carotte"], ["🌽", "Maïs"], ["🍄", "Champignon"], ["🌶️", "Piment"], ["🥦", "Brocoli"],
+    ["🧄", "Ail"], ["🧅", "Oignon"], ["🥔", "Patate"], ["🥒", "Concombre"], ["🫑", "Poivron"],
+  ]},
+  { label: "Plats & snacks", emojis: [
+    ["🍳", "Œuf"], ["🧀", "Fromage"], ["🥐", "Croissant"], ["🍕", "Pizza"], ["🌮", "Taco"], ["🍔", "Burger"],
+    ["🌭", "Hot-dog"], ["🍝", "Pâtes"], ["🍣", "Sushi"], ["🥗", "Salade"], ["🥞", "Pancakes"], ["🥨", "Bretzel"], ["🧇", "Gaufre"],
+  ]},
+  { label: "Sucré & boissons", emojis: [
+    ["🍩", "Donut"], ["☕", "Café"], ["🍯", "Miel"], ["🍰", "Gâteau"], ["🍦", "Glace"], ["🍷", "Vin"], ["🧃", "Jus"],
+  ]},
+];
+
+const EmojiAvatarPicker = ({ current, onClose, onSave }) => (
+  <Modal onClose={onClose} width="420px">
+    <ModalHeader title="Choisir un avatar" onClose={onClose} />
+    <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {AVATAR_EMOJI_GROUPS.map((group) => (
+        <div key={group.label}>
+          <p className="mp-micro mp-text-soft" style={{ textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em", marginBottom: "0.4rem" }}>
+            {group.label}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+            {group.emojis.map(([emoji, label]) => (
+              <button key={emoji} type="button" title={label} onClick={() => onSave(emoji)}
+                style={{
+                  width: "2.6rem", height: "2.6rem", borderRadius: "50%", fontSize: "1.35rem",
+                  border: `1.5px solid ${current === emoji ? "var(--clay)" : "var(--line)"}`,
+                  background: current === emoji ? "var(--clay-wash)" : "var(--paper-sunken)",
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </Modal>
+);
+
+const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, onJoinFamily, onLeaveFamily, onSetActiveFamily, onPromoteMember, onRemoveMember, onRegenerateCode, onAddMemberByEmail, onAddLocalMember, onSetMyAvatar, onSetMemberAvatar }) => {
   const hasNoFamily = families.length === 0;
   const [tab, setTab] = useState("create");
   const [showJoinCreate, setShowJoinCreate] = useState(hasNoFamily);
@@ -5299,6 +5355,7 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
   const [memberName, setMemberName] = useState("");
   const [addMemberError, setAddMemberError] = useState("");
   const [addingMember, setAddingMember] = useState(false);
+  const [avatarPickerFor, setAvatarPickerFor] = useState(null); // membre en cours d'édition d'avatar, ou null
 
   const activeFamily = families.find((f) => f.id === currentUser?.activeFamilyId) || families[0];
   const currentMember = activeFamily?.members.find((m) => m.userId === currentUser?.id);
@@ -5476,9 +5533,11 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
           {activeFamily.members.map((member) => {
             const isSelf = member.userId === currentUser.id;
             const memberKey = member.memberId || member.userId;
+            const canEditAvatar = isSelf || (isAdmin && !member.userId);
             return (
               <div key={memberKey} style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", padding: "0.6rem 0", borderBottom: "1px solid var(--line)" }}>
-                <UserAvatar name={member.userName} size="sm" />
+                <UserAvatar name={member.userName} avatarEmoji={member.avatarEmoji} size="sm"
+                  onClick={canEditAvatar ? () => setAvatarPickerFor(member) : undefined} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
                     <span className="mp-small" style={{ fontWeight: 600 }}>{member.userName}</span>
@@ -5528,6 +5587,18 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
           })}
         </div>
       </div>
+
+      {avatarPickerFor && (
+        <EmojiAvatarPicker
+          current={avatarPickerFor.avatarEmoji}
+          onClose={() => setAvatarPickerFor(null)}
+          onSave={(emoji) => {
+            if (avatarPickerFor.userId === currentUser.id) onSetMyAvatar(emoji);
+            else onSetMemberAvatar(activeFamily.id, avatarPickerFor.memberId, emoji);
+            setAvatarPickerFor(null);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -6656,6 +6727,7 @@ const fetchFamiliesForUser = async (user: AppUser): Promise<any[]> => {
           userId: m.profile_id,
           userName: m.name,
           userEmail: m.profile_id === user.id ? user.email : "",
+          avatarEmoji: m.avatar_emoji,
           role: m.profile_id === familyRow.owner_profile_id ? "admin" : "member",
         }));
       // Garantit que l'utilisateur courant apparaît, même sans ligne family_members dédiée.
@@ -6665,6 +6737,7 @@ const fetchFamiliesForUser = async (user: AppUser): Promise<any[]> => {
           userId: user.id,
           userName: user.name,
           userEmail: user.email,
+          avatarEmoji: null,
           role: user.id === familyRow.owner_profile_id ? "admin" : "member",
         });
       }
@@ -7227,6 +7300,48 @@ const App = () => {
     showToast(`${trimmedName} ajouté(e) à la famille`, "sage");
   };
 
+  // Un membre choisit son propre avatar — appliqué à toutes ses familles (RPC
+  // SECURITY DEFINER : un membre normal n'a pas le droit de modifier sa ligne
+  // family_members via RLS classique, seul le propriétaire de la famille l'a).
+  const handleSetMyAvatar = async (emoji: string) => {
+    if (currentUser.id === "demo") {
+      setFamilies((prev: any[]) => prev.map((f) => ({
+        ...f,
+        members: f.members.map((m: any) => m.userId === currentUser.id ? { ...m, avatarEmoji: emoji } : m),
+      })));
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.rpc("set_my_avatar", { p_avatar_emoji: emoji });
+      if (error) throw error;
+      const loaded = await fetchFamiliesForUser(currentUser);
+      const loadedIds = new Set(loaded.map((f) => f.id));
+      setFamilies((prev: any[]) => [...prev.filter((f) => !loadedIds.has(f.id)), ...loaded]);
+    } catch { showToast("Erreur lors de la mise à jour de l'avatar", "clay"); }
+  };
+
+  // L'admin choisit l'avatar d'un membre sans compte (couvert par la policy existante
+  // "gestion des membres par le propriétaire").
+  const handleSetMemberAvatar = async (familyId: string, memberId: string, emoji: string) => {
+    if (currentUser.id === "demo") {
+      setFamilies((prev: any[]) => prev.map((f) => f.id !== familyId ? f : {
+        ...f,
+        members: f.members.map((m: any) => (m.memberId || m.userId) === memberId ? { ...m, avatarEmoji: emoji } : m),
+      }));
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from("family_members").update({ avatar_emoji: emoji }).eq("member_id", memberId);
+      if (error) throw error;
+      setFamilies((prev: any[]) => prev.map((f) => f.id !== familyId ? f : {
+        ...f,
+        members: f.members.map((m: any) => m.memberId === memberId ? { ...m, avatarEmoji: emoji } : m),
+      }));
+    } catch { showToast("Erreur lors de la mise à jour de l'avatar", "clay"); }
+  };
+
   const handleJoinFamily = async (code: string) => {
     if (currentUser.id === "demo") {
       const allFamilies: any[] = loadFromStorage(STORAGE_KEYS.families, [DEMO_FAMILY]);
@@ -7787,7 +7902,7 @@ const App = () => {
     recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: isDemo ? initialRecipes : recipes.filter((r) => r.scope === "global"), ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
     preferences: { currentUser, ingredients, weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate, onUpdateUserProfile: handleUpdateUserProfile },
-    family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember },
+    family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember, onSetMyAvatar: handleSetMyAvatar, onSetMemberAvatar: handleSetMemberAvatar },
     account: { currentUser, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onNavigate: setCurrentView },
   };
 
