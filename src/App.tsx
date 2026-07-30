@@ -6896,6 +6896,45 @@ const App = () => {
     return () => { cancelled = true; };
   }, [currentUser?.id]);
 
+  // ── Synchronisation temps réel des recettes (Realtime) — comptes non-démo ──
+  // Une recette créée/modifiée/partagée par un autre membre de la famille apparaît
+  // sans recharger. Pas de family_id unique sur "recipes" (global/privé/familial/
+  // partagé), donc abonnement non filtré : RLS restreint déjà ce que ce client reçoit,
+  // comme pour meal_plan_meals/meal_plan_meal_recipes.
+  useEffect(() => {
+    if (!currentUser || isDemo) return;
+    let cancelled = false;
+    let channel: any = null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const refetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const loaded = await fetchRecipesForUser();
+        if (!cancelled) setRecipes(loaded);
+      }, 300);
+    };
+
+    (async () => {
+      const sb = await getSupabase();
+      if (!sb || cancelled) return;
+      channel = sb
+        .channel(`recipes-${currentUser.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "recipes" }, refetch)
+        .on("postgres_changes", { event: "*", schema: "public", table: "recipe_ingredients" }, refetch)
+        .on("postgres_changes", { event: "*", schema: "public", table: "recipe_steps" }, refetch)
+        .on("postgres_changes", { event: "*", schema: "public", table: "recipe_family_shares" }, refetch)
+        .on("postgres_changes", { event: "*", schema: "public", table: "recipe_variants" }, refetch)
+        .subscribe();
+    })();
+
+    return () => {
+      cancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (channel) channel.unsubscribe();
+    };
+  }, [currentUser?.id, isDemo]);
+
   // ── Chargement des repas / courses / semaines types de la famille active (comptes non-démo) ──
   useEffect(() => {
     if (!currentUser || isDemo || !activeFamily?.id) return;
