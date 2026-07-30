@@ -1986,6 +1986,30 @@ const DuplicateWeekModal = ({ dateStr, mealPlans, onClose, onDuplicate }) => {
   );
 };
 
+// Pile compacte d'avatars des convives présents à un repas — utilisée dans les cartes
+// du planning (jour, semaine, mois) pour voir en un coup d'œil qui participe.
+const AttendeeAvatarStack = ({ attendeeIds, familyMembers = [], max = 4 }) => {
+  if (!attendeeIds || attendeeIds.length === 0 || familyMembers.length === 0) return null;
+  const members = attendeeIds.map((id) => familyMembers.find((m) => m.memberId === id)).filter(Boolean);
+  if (members.length === 0) return null;
+  const shown = members.slice(0, max);
+  const extra = members.length - shown.length;
+  return (
+    <div style={{ display: "flex", alignItems: "center", marginTop: "0.3rem" }}>
+      {shown.map((m, i) => (
+        <div key={m.memberId} title={m.userName} style={{
+          width: "1.1rem", height: "1.1rem", borderRadius: "50%", background: "var(--clay-wash)",
+          border: "1.5px solid var(--paper-raised)", display: "flex", alignItems: "center", justifyContent: "center",
+          marginLeft: i === 0 ? 0 : "-0.35rem", flexShrink: 0, zIndex: shown.length - i,
+        }}>
+          <span style={{ fontSize: "0.55rem", fontWeight: 700, color: "var(--clay)" }}>{m.userName?.charAt(0).toUpperCase()}</span>
+        </div>
+      ))}
+      {extra > 0 && <span className="mp-micro mp-text-faint" style={{ marginLeft: "0.25rem" }}>+{extra}</span>}
+    </div>
+  );
+};
+
 // Panneau de détail d'une journée — s'insère sous la ligne de semaine
 const DayPanel = ({
   date, dateStr, mealPlans, recipes, recentRecipeIds,
@@ -2004,20 +2028,20 @@ const DayPanel = ({
     return (meal.recipeIds || []).map((id) => recipes.find((r) => r.id === id)?.name).filter(Boolean);
   };
 
-  const handleSaveSlot = (recipeIds, attendeeCount) => {
+  const handleSaveSlot = (recipeIds, attendeeIds) => {
     const type = editingSlot.type;
     const meal = getMeal(type);
-    if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeCount);
-    else onAddMeal({ date: dateStr, type, recipeIds, status: "normal", attendeeCount });
+    if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds);
+    else onAddMeal({ date: dateStr, type, recipeIds, status: "normal", attendeeIds });
     setEditingSlot(null);
     setFlashedSlot(type); setTimeout(() => setFlashedSlot(null), 650);
   };
 
-  const handleSaveStatus = (status, recipeIds, attendeeCount) => {
+  const handleSaveStatus = (status, recipeIds, attendeeIds) => {
     const type = editingSlot.type;
     const meal = getMeal(type);
-    if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeCount);
-    else onAddMeal({ date: dateStr, type, recipeIds, status, attendeeCount });
+    if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds);
+    else onAddMeal({ date: dateStr, type, recipeIds, status, attendeeIds });
     setEditingSlot(null);
     setFlashedSlot(type); setTimeout(() => setFlashedSlot(null), 650);
   };
@@ -2119,7 +2143,10 @@ const DayPanel = ({
                 {status === "normal" && (
                   names.length === 0
                     ? <span className="mp-small mp-text-faint">+ Ajouter</span>
-                    : <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4, paddingRight: "1.4rem" }}>{names.join(", ")}</span>
+                    : <>
+                        <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4, paddingRight: "1.4rem" }}>{names.join(", ")}</span>
+                        <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
+                      </>
                 )}
               </button>
 
@@ -2547,7 +2574,10 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
                           {status === "normal" && (
                             names.length === 0
                               ? <span className="mp-small mp-text-faint">+ Ajouter</span>
-                              : <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span>
+                              : <>
+                                  <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span>
+                                  <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
+                                </>
                           )}
                         </button>
                       );
@@ -2604,16 +2634,16 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
                 recentRecipeIds={recentRecipeIds}
                 familyMembers={familyMembers}
                 onClose={() => setWeekEditingSlot(null)}
-                onSave={(recipeIds, attendeeCount) => {
+                onSave={(recipeIds, attendeeIds) => {
                   const meal = mealPlans.find((mp) => mp.date === weekEditingSlot.dateStr && mp.type === weekEditingSlot.type);
-                  if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeCount);
-                  else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeCount });
+                  if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds);
+                  else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeIds });
                   setWeekEditingSlot(null);
                 }}
-                onSaveStatus={(status, recipeIds, attendeeCount) => {
+                onSaveStatus={(status, recipeIds, attendeeIds) => {
                   const meal = mealPlans.find((mp) => mp.date === weekEditingSlot.dateStr && mp.type === weekEditingSlot.type);
-                  if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeCount);
-                  else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeCount });
+                  if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds);
+                  else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeIds });
                   setWeekEditingSlot(null);
                 }}
               />
@@ -2722,7 +2752,7 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
                           style={{ width: "100%", boxSizing: "border-box", background: bgColor, border: `1px solid ${borderColor}`, borderRadius: radius.sm, padding: "0.55rem 0.65rem", cursor: isPast ? "default" : "pointer", textAlign: "left", fontFamily: "inherit", transition: "background 100ms, border-color 100ms", minHeight: "4rem", opacity: isPast ? 0.55 : 1 }}>
                           {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
-                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span>)}
+                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
                         </button>
                       );
                     })}
@@ -2736,8 +2766,8 @@ const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecip
               <RecipeSelectionModal recipes={recipes} meal={weekEditingSlot.mealId ? mealPlans.find((mp) => mp.id === weekEditingSlot.mealId) : null}
                 mealType={weekEditingSlot.type} date={weekEditingSlot.dateStr} recentRecipeIds={recentRecipeIds} familyMembers={familyMembers}
                 onClose={() => setWeekEditingSlot(null)}
-                onSave={(recipeIds, attendeeCount) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeCount); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeCount }); setWeekEditingSlot(null); }}
-                onSaveStatus={(status, recipeIds, attendeeCount) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeCount); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeCount }); setWeekEditingSlot(null); }}
+                onSave={(recipeIds, attendeeIds) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeIds }); setWeekEditingSlot(null); }}
+                onSaveStatus={(status, recipeIds, attendeeIds) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeIds }); setWeekEditingSlot(null); }}
               />
             )}
           </div>
@@ -2870,16 +2900,20 @@ const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, onSave, 
   const [status, setStatus] = useState(meal?.status || "normal");
   const [filterCat, setFilterCat] = useState(null);
   const [search, setSearch] = useState("");
-  const [attendeeCount, setAttendeeCount] = useState(meal?.attendeeCount ?? familyMembers.length);
+  const allMemberIds = useMemo(() => familyMembers.filter((m) => m.memberId).map((m) => m.memberId), [familyMembers]);
+  const [attendeeIds, setAttendeeIds] = useState(meal?.attendeeIds ?? allMemberIds);
   const typeLabel = MEAL_TYPES.find((t) => t.id === mealType)?.label || mealType;
 
   const toggle = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleAttendee = (memberId) => setAttendeeIds((prev) => prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]);
+  const allAttending = allMemberIds.length > 0 && allMemberIds.every((id) => attendeeIds.includes(id));
+  const toggleAllAttendees = () => setAttendeeIds(allAttending ? [] : allMemberIds);
 
   const handleSave = () => {
     if (status !== "normal") {
-      onSaveStatus(status, [], attendeeCount);
+      onSaveStatus(status, [], attendeeIds);
     } else {
-      onSave(selected, attendeeCount);
+      onSave(selected, attendeeIds);
     }
   };
 
@@ -2955,27 +2989,40 @@ const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, onSave, 
         </button>
       </div>
 
-      {/* Nombre de convives réellement présents (pour ajuster les quantités) */}
+      {/* Convives réellement présents (pour allergies, goûts et quantités) */}
       {familyMembers.length > 0 && (
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
           marginBottom: "0.9rem", paddingBottom: "0.9rem", borderBottom: "1px solid var(--line)",
           opacity: status !== "normal" ? 0.4 : 1, pointerEvents: status !== "normal" ? "none" : "auto",
         }}>
-          <div>
-            <span className="mp-small" style={{ fontWeight: 600, display: "block" }}>Convives présents</span>
-            <span className="mp-micro mp-text-faint">Pour ajuster les quantités de la liste de courses</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", flexShrink: 0 }}>
-            <button type="button" onClick={() => setAttendeeCount((c) => Math.max(1, c - 1))}
-              style={{ width: "1.8rem", height: "1.8rem", borderRadius: radius.sm, border: "1px solid var(--line)", background: "var(--paper-sunken)", cursor: "pointer", fontFamily: "inherit", fontSize: "1rem", color: "var(--ink-soft)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              −
+          <span className="mp-small" style={{ fontWeight: 600, display: "block" }}>Convives présents</span>
+          <span className="mp-micro mp-text-faint" style={{ display: "block", marginBottom: "0.5rem" }}>Pour les allergies, goûts et quantités</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+            <button type="button" onClick={toggleAllAttendees}
+              style={{
+                padding: "0.25rem 0.6rem", borderRadius: radius.pill, cursor: "pointer",
+                fontFamily: "inherit", fontSize: "0.78rem", fontWeight: allAttending ? 700 : 500,
+                border: `1.5px solid ${allAttending ? "var(--sage)" : "var(--line)"}`,
+                background: allAttending ? "var(--sage-wash)" : "transparent",
+                color: allAttending ? "var(--sage)" : "var(--ink-soft)",
+              }}>
+              Tout le monde
             </button>
-            <span className="mp-small" style={{ textAlign: "center", fontWeight: 600, minWidth: "1.5rem" }}>{attendeeCount}</span>
-            <button type="button" onClick={() => setAttendeeCount((c) => Math.min(familyMembers.length, c + 1))}
-              style={{ width: "1.8rem", height: "1.8rem", borderRadius: radius.sm, border: "1px solid var(--line)", background: "var(--paper-sunken)", cursor: "pointer", fontFamily: "inherit", fontSize: "1rem", color: "var(--ink-soft)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              +
-            </button>
+            {familyMembers.filter((m) => m.memberId).map((m) => {
+              const active = attendeeIds.includes(m.memberId);
+              return (
+                <button key={m.memberId} type="button" onClick={() => toggleAttendee(m.memberId)}
+                  style={{
+                    padding: "0.25rem 0.6rem", borderRadius: radius.pill, cursor: "pointer",
+                    fontFamily: "inherit", fontSize: "0.78rem", fontWeight: active ? 700 : 500,
+                    border: `1.5px solid ${active ? "var(--clay)" : "var(--line)"}`,
+                    background: active ? "var(--clay-wash)" : "transparent",
+                    color: active ? "var(--clay)" : "var(--ink-soft)",
+                  }}>
+                  {m.userName}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -6021,7 +6068,7 @@ const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave, familyMembe
         recentRecipeIds={recentRecipeIds}
         familyMembers={familyMembers}
         onClose={onClose}
-        onSave={(recipeIds, attendeeCount) => { onSave({ date, type: mealType, recipeIds, attendeeCount }); onClose(); }}
+        onSave={(recipeIds, attendeeIds) => { onSave({ date, type: mealType, recipeIds, attendeeIds }); onClose(); }}
       />
     );
   }
@@ -6472,7 +6519,7 @@ const fetchMealPlansForFamily = async (familyId: string): Promise<any[]> => {
   if (!sb) return [];
   const { data, error } = await sb
     .from("meal_plans")
-    .select("id, date, meal_plan_meals(id, meal_type, status, attendee_count, meal_plan_meal_recipes(recipe_id, order_index))")
+    .select("id, date, meal_plan_meals(id, meal_type, status, meal_plan_meal_attendees(member_id), meal_plan_meal_recipes(recipe_id, order_index))")
     .eq("family_id", familyId);
   if (error || !data) return [];
 
@@ -6484,7 +6531,7 @@ const fetchMealPlansForFamily = async (familyId: string): Promise<any[]> => {
         date: mp.date,
         type: meal.meal_type,
         status: meal.status,
-        attendeeCount: meal.attendee_count,
+        attendeeIds: (meal.meal_plan_meal_attendees || []).map((a: any) => String(a.member_id)),
         recipeIds: (meal.meal_plan_meal_recipes || [])
           .sort((a: any, b: any) => a.order_index - b.order_index)
           .map((r: any) => String(r.recipe_id)),
@@ -6496,11 +6543,11 @@ const fetchMealPlansForFamily = async (familyId: string): Promise<any[]> => {
 };
 
 // Crée/à jour le créneau (date, type) d'une famille avec sa liste de recettes.
-// attendeeCount: nombre de convives réellement présents pour ce repas (undefined =
-// ne pas toucher la valeur existante en mise à jour ; null/absent = toute la famille).
+// attendeeIds: member_id des convives réellement présents (undefined = ne pas toucher
+// la sélection existante en mise à jour ; sur un nouveau créneau, toute la famille par défaut).
 const upsertMealSlot = async (
   sb: any, familyId: string, userId: string,
-  date: string, type: string, recipeIds: string[], status: string, attendeeCount?: number | null
+  date: string, type: string, recipeIds: string[], status: string, attendeeIds?: string[]
 ) => {
   let { data: mp } = await sb.from("meal_plans").select("id").eq("family_id", familyId).eq("date", date).maybeSingle();
   if (!mp) {
@@ -6510,15 +6557,27 @@ const upsertMealSlot = async (
   }
 
   let { data: meal } = await sb.from("meal_plan_meals").select("id").eq("meal_plan_id", mp.id).eq("meal_type", type).maybeSingle();
+  const isNewMeal = !meal;
   if (!meal) {
     const { data: newMeal, error } = await sb
-      .from("meal_plan_meals").insert({ meal_plan_id: mp.id, meal_type: type, status, updated_by: userId, attendee_count: attendeeCount ?? null }).select("id").single();
+      .from("meal_plan_meals").insert({ meal_plan_id: mp.id, meal_type: type, status, updated_by: userId }).select("id").single();
     if (error) throw new Error(error.message);
     meal = newMeal;
   } else {
-    const updatePayload: any = { status, updated_by: userId };
-    if (attendeeCount !== undefined) updatePayload.attendee_count = attendeeCount;
-    await sb.from("meal_plan_meals").update(updatePayload).eq("id", meal.id);
+    await sb.from("meal_plan_meals").update({ status, updated_by: userId }).eq("id", meal.id);
+  }
+
+  if (attendeeIds !== undefined) {
+    await sb.from("meal_plan_meal_attendees").delete().eq("meal_plan_meal_id", meal.id);
+    if (attendeeIds.length > 0) {
+      await sb.from("meal_plan_meal_attendees").insert(attendeeIds.map((memberId) => ({ meal_plan_meal_id: meal.id, member_id: memberId })));
+    }
+  } else if (isNewMeal) {
+    // Nouveau créneau sans sélection explicite (ex: application d'un modèle) : toute la famille par défaut.
+    const { data: members } = await sb.from("family_members").select("member_id").eq("family_id", familyId);
+    if (members?.length) {
+      await sb.from("meal_plan_meal_attendees").insert(members.map((m: any) => ({ meal_plan_meal_id: meal.id, member_id: m.member_id })));
+    }
   }
 
   await sb.from("meal_plan_meal_recipes").delete().eq("meal_plan_meal_id", meal.id);
@@ -7381,29 +7440,30 @@ const App = () => {
     const type = mealData?.type || "lunch";
     const recipeIds = mealData?.recipeIds || [];
     const status = mealData?.status || "normal";
-    const attendeeCount = mealData?.attendeeCount;
+    const attendeeIds = mealData?.attendeeIds;
     if (isDemo) {
-      setMealPlans((prev) => [...prev, { id: Date.now().toString(), date, recipeIds, type, status, attendeeCount, familyId: activeFamily?.id }]);
+      const resolvedAttendeeIds = attendeeIds ?? (activeFamily?.members || []).map((m: any) => m.memberId || m.userId).filter(Boolean);
+      setMealPlans((prev) => [...prev, { id: Date.now().toString(), date, recipeIds, type, status, attendeeIds: resolvedAttendeeIds, familyId: activeFamily?.id }]);
       return;
     }
     if (!activeFamily?.id) return;
     try {
       const sb = await getSupabase();
-      await upsertMealSlot(sb, activeFamily.id, currentUser.id, date, type, recipeIds, status, attendeeCount);
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, date, type, recipeIds, status, attendeeIds);
       setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
     } catch { showToast("Erreur lors de la planification du repas", "clay"); }
   };
 
-  const handleUpdateMeal = async (mealId, recipeIds, status = "normal", attendeeCount?: number | null) => {
+  const handleUpdateMeal = async (mealId, recipeIds, status = "normal", attendeeIds?: string[]) => {
     if (isDemo) {
-      setMealPlans((prev) => prev.map((mp) => mp.id === mealId ? { ...mp, recipeIds, status, ...(attendeeCount !== undefined ? { attendeeCount } : {}) } : mp));
+      setMealPlans((prev) => prev.map((mp) => mp.id === mealId ? { ...mp, recipeIds, status, ...(attendeeIds !== undefined ? { attendeeIds } : {}) } : mp));
       return;
     }
     const existing = mealPlans.find((mp) => mp.id === mealId);
     if (!existing || !activeFamily?.id) return;
     try {
       const sb = await getSupabase();
-      await upsertMealSlot(sb, activeFamily.id, currentUser.id, existing.date, existing.type, recipeIds, status, attendeeCount);
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, existing.date, existing.type, recipeIds, status, attendeeIds);
       setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
     } catch { showToast("Erreur lors de la mise à jour du repas", "clay"); }
   };
@@ -7469,7 +7529,7 @@ const App = () => {
       (meal.recipeIds || []).forEach((recipeId) => {
         const recipe = familyRecipes.find((r) => r.id === recipeId); if (!recipe) return;
         recipeCount++;
-        const attendees = meal.attendeeCount ?? activeFamily?.members.length ?? 1;
+        const attendees = meal.attendeeIds?.length ?? activeFamily?.members.length ?? 1;
         const multiplier = Math.max(1, attendees) / (recipe.portions || 4);
         recipe.ingredients.forEach((ing) => {
           const key = ing.ingredientName;
@@ -7612,7 +7672,7 @@ const App = () => {
     const targets = weekMeals.map((mp) => {
       const offset = Math.round((new Date(mp.date + "T12:00:00") - monday) / 86400000);
       const newDate = new Date(targetMonday); newDate.setDate(targetMonday.getDate() + offset);
-      return { newDateStr: newDate.toISOString().split("T")[0], type: mp.type, recipeIds: [...(mp.recipeIds || [])], status: mp.status || "normal", attendeeCount: mp.attendeeCount };
+      return { newDateStr: newDate.toISOString().split("T")[0], type: mp.type, recipeIds: [...(mp.recipeIds || [])], status: mp.status || "normal", attendeeIds: mp.attendeeIds };
     });
 
     if (isDemo) {
@@ -7620,7 +7680,7 @@ const App = () => {
       setMealPlans((prev) => {
         const additions = targets.map((t, idx) => {
           if (prev.some((p) => p.date === t.newDateStr && p.type === t.type && (p.recipeIds || []).length > 0)) return null;
-          return { id: `dup-${base}-${idx}`, date: t.newDateStr, type: t.type, recipeIds: t.recipeIds, status: t.status, attendeeCount: t.attendeeCount, familyId: activeFamily?.id };
+          return { id: `dup-${base}-${idx}`, date: t.newDateStr, type: t.type, recipeIds: t.recipeIds, status: t.status, attendeeIds: t.attendeeIds, familyId: activeFamily?.id };
         }).filter(Boolean);
         return [...prev, ...additions];
       });
@@ -7633,7 +7693,7 @@ const App = () => {
       const sb = await getSupabase();
       for (const t of targets) {
         if (mealPlans.some((p) => p.date === t.newDateStr && p.type === t.type && (p.recipeIds || []).length > 0)) continue;
-        await upsertMealSlot(sb, activeFamily.id, currentUser.id, t.newDateStr, t.type, t.recipeIds, t.status, t.attendeeCount);
+        await upsertMealSlot(sb, activeFamily.id, currentUser.id, t.newDateStr, t.type, t.recipeIds, t.status, t.attendeeIds);
       }
       setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
       showToast(`${weekMeals.length} repas dupliqué${weekMeals.length > 1 ? "s" : ""}`, "sage");
