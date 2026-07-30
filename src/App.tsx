@@ -739,6 +739,8 @@ const Icon = ({ name, size = 16 }) => {
 
     // ---- Icônes générales suite ----
     sunrise: <><path d="M12 2v3M4.22 6.22l2.12 2.12M2 14h3M19 14h3M17.66 8.34l2.12-2.12"/><path d="M5.5 17a6.5 6.5 0 0 1 13 0"/><line x1="2" y1="21" x2="22" y2="21"/></>,
+    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></>,
+    camera: <><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></>,
   };
   return (
     <svg {...common} aria-hidden="true" style={{ flexShrink: 0 }}>
@@ -3140,6 +3142,9 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
   const [steps, setSteps] = useState(recipe?.steps || []);
   const [stepTitleInput, setStepTitleInput] = useState("");
   const [stepBodyInput, setStepBodyInput] = useState("");
+  const [stepMinutesInput, setStepMinutesInput] = useState("");
+  const [stepPhotoUrl, setStepPhotoUrl] = useState(null);
+  const [uploadingStepPhoto, setUploadingStepPhoto] = useState(false);
   const [pickerCategory, setPickerCategory] = useState("legumes");
   const [pickerSearch, setPickerSearch] = useState("");
   const [pickedIngredient, setPickedIngredient] = useState(null);
@@ -3169,10 +3174,32 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
     setTagInput("");
   };
 
+  const handleStepPhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingStepPhoto(true);
+    try {
+      const sb = await getSupabase();
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name}`;
+      const { error } = await sb.storage.from("recipe-step-photos").upload(path, file);
+      if (error) throw error;
+      const { data } = sb.storage.from("recipe-step-photos").getPublicUrl(path);
+      setStepPhotoUrl(data.publicUrl);
+    } catch { /* upload silencieusement ignoré, l'utilisateur peut réessayer */ }
+    finally { setUploadingStepPhoto(false); }
+  };
+
   const addStep = () => {
     if (!stepBodyInput.trim()) return;
-    setSteps((prev) => [...prev, { id: `new-${Date.now()}`, title: stepTitleInput.trim(), body: stepBodyInput.trim() }]);
-    setStepTitleInput(""); setStepBodyInput("");
+    const minutes = parseFloat(stepMinutesInput.replace(",", "."));
+    setSteps((prev) => [...prev, {
+      id: `new-${Date.now()}`,
+      title: stepTitleInput.trim(),
+      body: stepBodyInput.trim(),
+      timerSeconds: minutes > 0 ? Math.round(minutes * 60) : null,
+      mediaUrl: stepPhotoUrl,
+    }]);
+    setStepTitleInput(""); setStepBodyInput(""); setStepMinutesInput(""); setStepPhotoUrl(null);
   };
   const removeStep = (idx) => setSteps((prev) => prev.filter((_, i) => i !== idx));
   const moveStep = (idx, dir) => setSteps((prev) => {
@@ -3380,9 +3407,17 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
               {steps.map((step, idx) => (
                 <div key={step.id || idx} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", background: "var(--paper-sunken)", borderRadius: radius.sm, border: "1px solid var(--line)" }}>
                   <span className="mp-badge mp-badge-neutral" style={{ flexShrink: 0, marginTop: "0.1rem" }}>{idx + 1}</span>
+                  {step.mediaUrl && (
+                    <img src={step.mediaUrl} alt="" style={{ width: "2.6rem", height: "2.6rem", objectFit: "cover", borderRadius: radius.sm, flexShrink: 0 }} />
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {step.title && <p className="mp-small" style={{ fontWeight: 600, marginBottom: "0.15rem" }}>{step.title}</p>}
                     <p className="mp-small mp-text-soft" style={{ whiteSpace: "pre-wrap" }}>{step.body}</p>
+                    {step.timerSeconds > 0 && (
+                      <span className="mp-micro mp-text-faint" style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem", marginTop: "0.2rem" }}>
+                        <Icon name="clock" size={11} /> {Math.round(step.timerSeconds / 60)} min
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem", flexShrink: 0 }}>
                     <button type="button" onClick={() => moveStep(idx, -1)} disabled={idx === 0}
@@ -3408,10 +3443,27 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
               onChange={(e) => setStepTitleInput(e.target.value)} placeholder="Titre de l'étape (optionnel)" />
             <textarea className="mp-textarea" style={{ minHeight: "2.2rem", fontSize: "0.82rem" }} value={stepBodyInput}
               onChange={(e) => setStepBodyInput(e.target.value)} placeholder="Description de l'étape..." />
-            <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ alignSelf: "flex-end" }}
-              onClick={addStep} disabled={!stepBodyInput.trim()}>
-              <Icon name="plus" size={13} /> Ajouter l'étape
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                <Icon name="clock" size={13} />
+                <input className="mp-input" type="number" min="0" step="0.5" style={{ width: "3.6rem", fontSize: "0.8rem" }}
+                  value={stepMinutesInput} onChange={(e) => setStepMinutesInput(e.target.value)} placeholder="min" />
+              </div>
+              <label className="mp-btn mp-btn-secondary mp-btn-sm" style={{ cursor: "pointer", margin: 0 }}>
+                <Icon name="camera" size={13} /> {uploadingStepPhoto ? "Envoi..." : stepPhotoUrl ? "Photo ✓" : "Photo"}
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleStepPhotoChange} disabled={uploadingStepPhoto} />
+              </label>
+              {stepPhotoUrl && (
+                <button type="button" onClick={() => setStepPhotoUrl(null)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)", display: "flex" }} aria-label="Retirer la photo">
+                  <Icon name="x" size={13} />
+                </button>
+              )}
+              <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ marginLeft: "auto" }}
+                onClick={addStep} disabled={!stepBodyInput.trim()}>
+                <Icon name="plus" size={13} /> Ajouter l'étape
+              </button>
+            </div>
           </div>
         </div>
       ) : (
@@ -3430,6 +3482,40 @@ const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
 };
 
 // Mode cuisine — affiche les étapes une par une, en plein écran de la modale
+// Minuteur d'étape — remonté (via key={stepIndex} côté appelant) à chaque changement
+// d'étape pour repartir de zéro sans logique de synchronisation supplémentaire.
+const StepTimer = ({ seconds }) => {
+  const [remaining, setRemaining] = useState(seconds);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (!running || remaining <= 0) return;
+    const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
+    return () => clearTimeout(t);
+  }, [running, remaining]);
+
+  const done = remaining <= 0;
+  const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const ss = String(remaining % 60).padStart(2, "0");
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.6rem 0.8rem", background: done ? "var(--sage-wash)" : "var(--paper-sunken)", borderRadius: radius.sm, border: "1px solid var(--line)", marginBottom: space.md }}>
+      <Icon name="clock" size={16} />
+      <span className="mp-h3" style={{ fontVariantNumeric: "tabular-nums", minWidth: "3.2rem" }}>{mm}:{ss}</span>
+      {done ? (
+        <span className="mp-small" style={{ color: "var(--sage)", fontWeight: 600 }}>Terminé</span>
+      ) : (
+        <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" onClick={() => setRunning((r) => !r)}>
+          {running ? "Pause" : "Démarrer"}
+        </button>
+      )}
+      <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => { setRemaining(seconds); setRunning(false); }}>
+        Réinitialiser
+      </button>
+    </div>
+  );
+};
+
 const CookModeModal = ({ recipe, onClose }) => {
   const steps = recipe.steps || [];
   const [stepIndex, setStepIndex] = useState(0);
@@ -3462,6 +3548,10 @@ const CookModeModal = ({ recipe, onClose }) => {
           Étape {stepIndex + 1} / {steps.length}
         </p>
         {step.title && <h3 className="mp-h3" style={{ marginBottom: "0.6rem" }}>{step.title}</h3>}
+        {step.mediaUrl && (
+          <img src={step.mediaUrl} alt="" style={{ width: "100%", maxHeight: "220px", objectFit: "cover", borderRadius: radius.md, marginBottom: space.md }} />
+        )}
+        {step.timerSeconds > 0 && <StepTimer key={stepIndex} seconds={step.timerSeconds} />}
         <p className="mp-body" style={{ lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{step.body}</p>
       </div>
 
@@ -3614,9 +3704,17 @@ const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], currentUser, 
                 {recipe.steps.map((step, idx) => (
                   <div key={step.id || idx} style={{ display: "flex", gap: "0.5rem" }}>
                     <span className="mp-badge mp-badge-neutral" style={{ flexShrink: 0, height: "fit-content" }}>{idx + 1}</span>
+                    {step.mediaUrl && (
+                      <img src={step.mediaUrl} alt="" style={{ width: "2.6rem", height: "2.6rem", objectFit: "cover", borderRadius: radius.sm, flexShrink: 0 }} />
+                    )}
                     <div>
                       {step.title && <p className="mp-small" style={{ fontWeight: 600 }}>{step.title}</p>}
                       <p className="mp-small mp-text-soft" style={{ whiteSpace: "pre-wrap" }}>{step.body}</p>
+                      {step.timerSeconds > 0 && (
+                        <span className="mp-micro mp-text-faint" style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem", marginTop: "0.2rem" }}>
+                          <Icon name="clock" size={11} /> {Math.round(step.timerSeconds / 60)} min
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -5362,7 +5460,13 @@ const EmojiAvatarPicker = ({ current, onClose, onSave }) => (
   </Modal>
 );
 
-const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, onJoinFamily, onLeaveFamily, onSetActiveFamily, onPromoteMember, onRemoveMember, onRegenerateCode, onAddMemberByEmail, onAddLocalMember, onSetMyAvatar, onSetMemberAvatar }) => {
+const APPETITE_LEVELS = [
+  { id: "small", label: "Moineaux", multiplier: 0.8 },
+  { id: "medium", label: "Normal", multiplier: 1 },
+  { id: "large", label: "Vorace", multiplier: 1.3 },
+];
+
+const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, onJoinFamily, onLeaveFamily, onSetActiveFamily, onPromoteMember, onRemoveMember, onRegenerateCode, onAddMemberByEmail, onAddLocalMember, onSetMyAvatar, onSetMemberAvatar, onSetMyAppetite, onAssignMemberAppetite }) => {
   const hasNoFamily = families.length === 0;
   const [tab, setTab] = useState("create");
   const [showJoinCreate, setShowJoinCreate] = useState(hasNoFamily);
@@ -5379,7 +5483,9 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
 
   const activeFamily = families.find((f) => f.id === currentUser?.activeFamilyId) || families[0];
   const currentMember = activeFamily?.members.find((m) => m.userId === currentUser?.id);
-  const isAdmin = currentMember?.role === "admin";
+  // Seul le propriétaire (créateur de la famille) a les droits de gestion des membres —
+  // un co-admin promu a le badge mais pas ces droits (RLS reste owner-only).
+  const isOwner = !!currentUser?.id && activeFamily?.ownerId === currentUser.id;
 
   const copyCode = (code) => {
     navigator.clipboard?.writeText(code).catch(() => {});
@@ -5490,7 +5596,7 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
             <h2 className="mp-h2">{activeFamily.name}</h2>
             <p className="mp-micro mp-text-faint">{activeFamily.members.length} membre{activeFamily.members.length > 1 ? "s" : ""}</p>
           </div>
-          {families.length > 1 && !isAdmin && (
+          {families.length > 1 && !isOwner && (
             <button type="button" className="mp-btn mp-btn-danger mp-btn-sm" onClick={() => onLeaveFamily(activeFamily.id)}>
               Quitter
             </button>
@@ -5507,7 +5613,7 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
             <Icon name={copiedCode === activeFamily.inviteCode ? "check" : "copy"} size={13} />
             {copiedCode === activeFamily.inviteCode ? "Copié" : "Copier"}
           </button>
-          {isAdmin && (
+          {isOwner && (
             <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => onRegenerateCode(activeFamily.id)} title="Générer un nouveau code">
               Nouveau code
             </button>
@@ -5515,7 +5621,7 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
         </div>
 
         {/* Ajouter un membre */}
-        {isAdmin && (
+        {isOwner && (
           <div style={{ marginBottom: space.md }}>
             <span className="mp-label">Ajouter un membre</span>
             <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.5rem" }}>
@@ -5553,7 +5659,10 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
           {activeFamily.members.map((member) => {
             const isSelf = member.userId === currentUser.id;
             const memberKey = member.memberId || member.userId;
-            const canEditAvatar = isSelf || (isAdmin && !member.userId);
+            const canEditAvatar = isSelf || (isOwner && !member.userId);
+            // Verrouillé dès que renseigné par le titulaire du compte : lui seul peut
+            // ensuite le changer. Sans compte, seul le propriétaire de la famille décide.
+            const canEditAppetite = isSelf || (!member.userId ? isOwner : !member.appetite);
             return (
               <div key={memberKey} style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", padding: "0.6rem 0", borderBottom: "1px solid var(--line)" }}>
                 <UserAvatar name={member.userName} avatarEmoji={member.avatarEmoji} size="sm"
@@ -5589,8 +5698,25 @@ const FamilyView = ({ families, currentUser, ingredients = [], onCreateFamily, o
                       </div>
                     ) : <p className="mp-micro mp-text-faint">Aucune allergie renseignée</p>;
                   })()}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                    <span className="mp-micro mp-text-faint">Appétit :</span>
+                    {canEditAppetite ? (
+                      APPETITE_LEVELS.map((lvl) => (
+                        <button key={lvl.id} type="button"
+                          className={`mp-btn mp-btn-sm ${member.appetite === lvl.id ? "mp-btn-primary" : "mp-btn-secondary"}`}
+                          style={{ padding: "0.1rem 0.5rem", fontSize: "0.72rem" }}
+                          onClick={() => isSelf ? onSetMyAppetite(lvl.id) : onAssignMemberAppetite(activeFamily.id, member.memberId, lvl.id)}>
+                          {lvl.label}
+                        </button>
+                      ))
+                    ) : (
+                      <span className="mp-badge mp-badge-neutral">
+                        {member.appetite ? APPETITE_LEVELS.find((l) => l.id === member.appetite)?.label : "Non renseigné"}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                {isAdmin && !isSelf && (
+                {isOwner && !isSelf && (
                   <div style={{ display: "flex", gap: "0.25rem" }}>
                     {member.role !== "admin" && (
                       <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => onPromoteMember(activeFamily.id, member.userId)} title="Promouvoir admin">
@@ -6299,7 +6425,8 @@ const DEMO_FAMILY = {
   id: "demo-family",
   name: "Famille Demo",
   inviteCode: "DEMO01",
-  members: [{ memberId: "demo", userId: "demo", userName: "Famille Demo", userEmail: "demo@carnet.app", role: "admin" }],
+  ownerId: "demo",
+  members: [{ memberId: "demo", userId: "demo", userName: "Famille Demo", userEmail: "demo@carnet.app", role: "admin", appetite: "medium" }],
 };
 
 const generateInviteCode = () =>
@@ -6547,7 +6674,7 @@ const fetchRecipesForUser = async (): Promise<any[]> => {
       recipe_categories(short_name),
       recipe_ingredients(ingredient_id, quantity_label, order_index, ingredients(name)),
       recipe_family_shares(family_id),
-      recipe_steps(id, order_index, title, body)
+      recipe_steps(id, order_index, title, body, timer_seconds, media_url)
     `)
     .order("name");
   if (error || !rows) return [];
@@ -6580,7 +6707,7 @@ const fetchRecipesForUser = async (): Promise<any[]> => {
         .map((ri: any) => ({ ingredientId: String(ri.ingredient_id), ingredientName: ri.ingredients?.name, quantity: ri.quantity_label })),
       steps: (r.recipe_steps || [])
         .sort((a: any, b: any) => a.order_index - b.order_index)
-        .map((s: any) => ({ id: String(s.id), title: s.title || "", body: s.body })),
+        .map((s: any) => ({ id: String(s.id), title: s.title || "", body: s.body, timerSeconds: s.timer_seconds || null, mediaUrl: s.media_url || null })),
     };
   });
 };
@@ -6613,6 +6740,8 @@ const saveRecipeSteps = async (sb: any, recipeId: number, steps: any[]) => {
       order_index: idx,
       title: s.title?.trim() || null,
       body: s.body.trim(),
+      timer_seconds: s.timerSeconds || null,
+      media_url: s.mediaUrl || null,
     }));
   if (rows.length > 0) await sb.from("recipe_steps").insert(rows);
 };
@@ -6748,7 +6877,8 @@ const fetchFamiliesForUser = async (user: AppUser): Promise<any[]> => {
           userName: m.name,
           userEmail: m.profile_id === user.id ? user.email : "",
           avatarEmoji: m.avatar_emoji,
-          role: m.profile_id === familyRow.owner_profile_id ? "admin" : "member",
+          appetite: m.appetite,
+          role: m.profile_id === familyRow.owner_profile_id ? "admin" : m.role,
         }));
       // Garantit que l'utilisateur courant apparaît, même sans ligne family_members dédiée.
       if (!members.some((m) => m.userId === user.id)) {
@@ -6758,6 +6888,7 @@ const fetchFamiliesForUser = async (user: AppUser): Promise<any[]> => {
           userName: user.name,
           userEmail: user.email,
           avatarEmoji: null,
+          appetite: null,
           role: user.id === familyRow.owner_profile_id ? "admin" : "member",
         });
       }
@@ -6765,6 +6896,7 @@ const fetchFamiliesForUser = async (user: AppUser): Promise<any[]> => {
         id: familyRow.family_id,
         name: familyRow.name,
         inviteCode: familyRow.invite_code,
+        ownerId: familyRow.owner_profile_id,
         members,
       };
     });
@@ -7220,6 +7352,7 @@ const App = () => {
         id: Date.now().toString(),
         name,
         inviteCode: generateInviteCode(),
+        ownerId: currentUser.id,
         members: [{ memberId: currentUser.id, userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
       };
       setFamilies((prev: any[]) => [...prev, newFamily]);
@@ -7255,6 +7388,7 @@ const App = () => {
       id: familyRow.family_id,
       name: familyRow.name,
       inviteCode: familyRow.invite_code,
+      ownerId: familyRow.owner_profile_id,
       members: [{ memberId: memberRow.member_id, userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, role: "admin" }],
     };
     setFamilies((prev: any[]) => [...prev.filter((f) => f.id !== newFamily.id), newFamily]);
@@ -7362,6 +7496,53 @@ const App = () => {
     } catch { showToast("Erreur lors de la mise à jour de l'avatar", "clay"); }
   };
 
+  // Un membre choisit son propre appétit (RPC set_my_appetite, comme set_my_avatar).
+  const handleSetMyAppetite = async (appetite: string) => {
+    if (currentUser.id === "demo") {
+      setFamilies((prev: any[]) => prev.map((f) => ({
+        ...f,
+        members: f.members.map((m: any) => m.userId === currentUser.id ? { ...m, appetite } : m),
+      })));
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.rpc("set_my_appetite", { p_appetite: appetite });
+      if (error) throw error;
+      const loaded = await fetchFamiliesForUser(currentUser);
+      const loadedIds = new Set(loaded.map((f) => f.id));
+      setFamilies((prev: any[]) => [...prev.filter((f) => !loadedIds.has(f.id)), ...loaded]);
+    } catch { showToast("Erreur lors de la mise à jour de l'appétit", "clay"); }
+  };
+
+  // Assignation par un tiers : l'admin peut le faire pour un membre sans compte ;
+  // n'importe quel membre peut le faire pour un membre AVEC compte tant que celui-ci
+  // ne l'a pas déjà renseigné lui-même (verrouillage géré côté RPC).
+  const handleAssignMemberAppetite = async (familyId: string, memberId: string, appetite: string) => {
+    if (currentUser.id === "demo") {
+      setFamilies((prev: any[]) => prev.map((f) => f.id !== familyId ? f : {
+        ...f,
+        members: f.members.map((m: any) => (m.memberId || m.userId) === memberId ? { ...m, appetite } : m),
+      }));
+      return;
+    }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.rpc("assign_member_appetite", { p_member_id: memberId, p_appetite: appetite });
+      if (error) {
+        const messages: Record<string, string> = {
+          already_set: "Ce membre a déjà renseigné son appétit — seul lui peut le modifier.",
+          not_authorized: "Vous n'avez pas le droit de modifier l'appétit de ce membre.",
+        };
+        throw new Error(messages[error.message] || error.message);
+      }
+      setFamilies((prev: any[]) => prev.map((f) => f.id !== familyId ? f : {
+        ...f,
+        members: f.members.map((m: any) => m.memberId === memberId ? { ...m, appetite } : m),
+      }));
+    } catch (err: any) { showToast(err.message || "Erreur lors de la mise à jour de l'appétit", "clay"); }
+  };
+
   const handleJoinFamily = async (code: string) => {
     if (currentUser.id === "demo") {
       const allFamilies: any[] = loadFromStorage(STORAGE_KEYS.families, [DEMO_FAMILY]);
@@ -7424,11 +7605,29 @@ const App = () => {
     showToast("Vous avez quitté la famille", "sage");
   };
 
-  const handlePromoteMember = (familyId, userId) => {
-    setFamilies((prev) => prev.map((f) => f.id !== familyId ? f : {
-      ...f, members: f.members.map((m) => ({ ...m, role: m.userId === userId ? "admin" : m.role }))
-    }));
-    showToast("Membre promu admin", "sage");
+  // Seul le propriétaire peut promouvoir (policy "gestion des membres par le
+  // propriétaire", ALL sur family_members) — un co-admin promu obtient le badge et
+  // partage l'admin visuellement, mais n'hérite pas des droits de gestion des membres.
+  const handlePromoteMember = async (familyId, userId) => {
+    if (currentUser.id === "demo") {
+      setFamilies((prev) => prev.map((f) => f.id !== familyId ? f : {
+        ...f, members: f.members.map((m) => ({ ...m, role: m.userId === userId ? "admin" : m.role }))
+      }));
+      showToast("Membre promu admin", "sage");
+      return;
+    }
+    try {
+      const family = families.find((f) => f.id === familyId);
+      const member = family?.members.find((m) => m.userId === userId);
+      if (!member?.memberId) throw new Error("no_member_row");
+      const sb = await getSupabase();
+      const { error } = await sb.from("family_members").update({ role: "admin" }).eq("member_id", member.memberId);
+      if (error) throw error;
+      setFamilies((prev) => prev.map((f) => f.id !== familyId ? f : {
+        ...f, members: f.members.map((m) => m.userId === userId ? { ...m, role: "admin" } : m)
+      }));
+      showToast("Membre promu admin", "sage");
+    } catch { showToast("Erreur lors de la promotion", "clay"); }
   };
 
   const handleRemoveMember = async (familyId, memberId) => {
@@ -7672,13 +7871,17 @@ const App = () => {
     }
     const parseQty = (str) => { const m = str.match(/^([\d.,/]+)\s*(.*)/); if (!m) return null; const num = parseFloat(m[1].replace(",",".")); return isNaN(num) ? null : { num, unit: m[2].trim() }; };
     const addQty = (a, b) => { const pa = parseQty(a), pb = parseQty(b); if (pa && pb && pa.unit === pb.unit) { const sum = Math.round((pa.num+pb.num)*10)/10; const noSpace = /^(g|kg|ml|L|cl|dl)$/.test(pa.unit); return `${Number.isInteger(sum)?sum:sum}${noSpace?"":pa.unit?" ":""}${pa.unit}`.trim(); } return `${a} + ${b}`; };
+    const memberById = new Map((activeFamily?.members || []).map((m) => [m.memberId || m.userId, m]));
+    const appetiteMultiplierOf = (m) => APPETITE_LEVELS.find((l) => l.id === m?.appetite)?.multiplier ?? 1;
     const aggregated = new Map(); let recipeCount = 0;
     upcomingMeals.forEach((meal) => {
       (meal.recipeIds || []).forEach((recipeId) => {
         const recipe = familyRecipes.find((r) => r.id === recipeId); if (!recipe) return;
         recipeCount++;
-        const attendees = meal.attendeeIds?.length ?? activeFamily?.members.length ?? 1;
-        const multiplier = Math.max(1, attendees) / (recipe.portions || 4);
+        const attendeeIds = meal.attendeeIds?.length ? meal.attendeeIds : (activeFamily?.members || []).map((m) => m.memberId || m.userId);
+        // Portions pondérées par appétit (Vorace ×1.3 / Normal ×1 / Moineaux ×0.8) plutôt qu'un simple headcount.
+        const weightedParts = attendeeIds.reduce((sum, id) => sum + appetiteMultiplierOf(memberById.get(id)), 0);
+        const multiplier = Math.max(1, weightedParts) / (recipe.portions || 4);
         recipe.ingredients.forEach((ing) => {
           const key = ing.ingredientName;
           const parsed = parseQty(ing.quantity);
@@ -7922,7 +8125,7 @@ const App = () => {
     recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: isDemo ? initialRecipes : recipes.filter((r) => r.scope === "global"), ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
     preferences: { currentUser, ingredients, weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate, onUpdateUserProfile: handleUpdateUserProfile },
-    family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember, onSetMyAvatar: handleSetMyAvatar, onSetMemberAvatar: handleSetMemberAvatar },
+    family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember, onSetMyAvatar: handleSetMyAvatar, onSetMemberAvatar: handleSetMemberAvatar, onSetMyAppetite: handleSetMyAppetite, onAssignMemberAppetite: handleAssignMemberAppetite },
     account: { currentUser, activeFamily, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onNavigate: setCurrentView, onSetMyAvatar: handleSetMyAvatar },
   };
 
