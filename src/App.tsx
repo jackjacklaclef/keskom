@@ -1990,6 +1990,19 @@ const DuplicateWeekModal = ({ dateStr, mealPlans, onClose, onDuplicate }) => {
 // du planning (jour, semaine, mois) pour voir en un coup d'œil qui participe.
 const AttendeeAvatarStack = ({ attendeeIds, familyMembers = [], max = 4 }) => {
   if (!attendeeIds || attendeeIds.length === 0 || familyMembers.length === 0) return null;
+
+  const validMemberIds = familyMembers.filter((m) => m.memberId).map((m) => m.memberId);
+  const allPresent = validMemberIds.length > 0 && validMemberIds.every((id) => attendeeIds.includes(id));
+  if (allPresent) {
+    return (
+      <div style={{ marginTop: "0.3rem" }}>
+        <span className="mp-micro mp-text-faint" style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+          <Icon name="users" size={11} /> Tout le monde
+        </span>
+      </div>
+    );
+  }
+
   const members = attendeeIds.map((id) => familyMembers.find((m) => m.memberId === id)).filter(Boolean);
   if (members.length === 0) return null;
   const shown = members.slice(0, max);
