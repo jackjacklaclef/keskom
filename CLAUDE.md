@@ -10,15 +10,21 @@ mêmes pièges.
 - Le front-end est en cours de découpage depuis un unique fichier `src/App.tsx`
   (~8200 lignes à l'origine) vers plusieurs modules — voir le plan complet dans
   `/Users/jacquesmolette/.claude/plans/giggly-inventing-frog.md` (9 étapes, une par
-  tour de conversation, chacune commitée séparément). État actuel : **étape 1/9
-  terminée** — `colors`/`dark`/`space`/`radius`/`GlobalStyle` → `src/theme.tsx` ;
+  tour de conversation, chacune commitée séparément). État actuel : **étapes 1-2/9
+  terminées** — `colors`/`dark`/`space`/`radius`/`GlobalStyle` → `src/theme.tsx` ;
   `MEAL_TYPES`/`NAV_ITEMS`/`RECIPE_CATEGORIES`/`QUANTITY_UNITS`/`DIET_OPTIONS`/
   `AVATAR_EMOJI_GROUPS`/`APPETITE_LEVELS`/`DAYS_OF_WEEK`/`MONTHS`/`PRIVACY_CONTENT`/
-  `STORAGE_KEYS`/`NEW_MEMBER_SENTINEL` → `src/constants.ts`. `App.tsx` fait encore
-  ~7400 lignes (composants, couche data Supabase, `AuthService`, le composant `App`
-  racine) — la suite (UI générique, couche data, vues métier) reste à extraire dans
-  les prochaines étapes. Refactor pur : aucune logique modifiée à chaque étape,
-  vérifié par `npm run build` + `npm run typecheck` (à parité avec l'état d'avant).
+  `STORAGE_KEYS`/`NEW_MEMBER_SENTINEL`/`ingredientCategories` → `src/constants.ts` ;
+  `Icon`/`CategoryIcon`/`Modal`/`ModalHeader`/`Field`/`EmptyState`/`MealBadge`/
+  `useToast`/`Toast`/`CategoryDot`/`TagInput`/`NavButton`/`LogoMark`/`Stepper`/
+  `KeskомLogo`/`AuthLogo`/`PasswordInput` → `src/components/ui.tsx` (un seul fichier
+  pour tous les primitives UI génériques, volontairement, pour limiter le nombre
+  d'allers-retours d'imports à chaque étape). `App.tsx` fait encore ~7000 lignes
+  (vues métier, couche data Supabase, `AuthService`, le composant `App` racine) — la
+  suite reste à extraire dans les prochaines étapes. Refactor pur : aucune logique
+  modifiée à chaque étape, vérifié par `npm run build` + `npm run typecheck` (à
+  parité avec l'état d'avant, aux erreurs près qui se redistribuent entre fichiers
+  sans changer de nature).
 - Client Supabase : **pas** le package npm installé dans `src/lib/supabaseClient.ts`
   (mort, jamais importé). App.tsx charge son propre client via un `<script>` CDN
   (`getSupabase()`, cache la *promesse* elle-même — voir bugs ci-dessous).
