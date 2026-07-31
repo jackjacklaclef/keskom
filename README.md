@@ -1,32 +1,85 @@
-# React + TypeScript + Vite
+# Keskom
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Application de planification de repas familiale : organiser le planning de la semaine,
+gérer un livre de recettes partagé, générer la liste de courses, et coordonner tout ça
+à plusieurs (famille, colocation...).
 
-Currently, two official plugins are available:
+React + Vite (TypeScript), backend [Supabase](https://supabase.com) (base Postgres,
+authentification, Realtime, Storage). Progressive Web App (installable sur mobile).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Fonctionnalités
 
-## React Compiler
+- **Planning** — calendrier semaine/jour, un ou plusieurs repas par créneau, statut
+  (prévu / à faire / fait), duplication d'une semaine sur une autre.
+- **Présence par repas** — choisir qui participe à chaque repas (tags, avec un raccourci
+  « Tout le monde ») ; sert au calcul des quantités de la liste de courses.
+- **Recettes** — catalogue partagé (recettes globales) + recettes privées ou partagées
+  au sein d'une famille, variantes d'une recette existante, étapes numérotées avec
+  minuteur et photo, mode « Cuisine » pas-à-pas.
+- **Liste de courses** — générée automatiquement à partir du planning sur une période
+  donnée, en tenant compte du nombre de portions de chaque recette et de l'appétit de
+  chaque convive.
+- **Famille** — plusieurs familles possibles par compte, invitation par code ou par
+  email, membres sans compte (juste un nom), avatar emoji, appétit (Moineaux / Normal /
+  Vorace), co-administration.
+- **Profil** — régime alimentaire, allergies et aliments non appréciés, pris en compte
+  dans les recettes et la liste de courses.
+- **Compte démo** — utilisable sans backend, entièrement en local (voir plus bas).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Démarrer en local
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+L'application est servie sur `http://localhost:5173`. Elle se connecte par défaut au
+projet Supabase de production (voir [Configuration](#configuration)) — pour explorer
+l'app sans toucher aux données réelles, utiliser le **compte démo** :
+
+- Email : `demo@carnet.app`
+- Mot de passe : `demo1234`
+
+Le compte démo fonctionne entièrement en `localStorage`, sans aucun appel réseau vers
+Supabase : aucune donnée créée avec ce compte n'est partagée ni persistée ailleurs que
+dans le navigateur utilisé.
+
+## Scripts disponibles
+
+| Commande               | Description                                              |
+|-------------------------|-----------------------------------------------------------|
+| `npm run dev`           | Serveur de développement avec rechargement à chaud        |
+| `npm run build`         | Build de production dans `dist/`                          |
+| `npm run preview`       | Sert le build de production en local                      |
+| `npm run typecheck`     | Vérification des types TypeScript (`tsc -b`)               |
+| `npm run lint`          | Lint (`oxlint`)                                            |
+| `npm run test:rls`      | Suite de tests de non-régression des policies RLS Supabase |
+
+## Configuration
+
+Le client Supabase pointe par défaut vers le projet de production. Pour utiliser un
+autre projet Supabase (par exemple pour du développement isolé), définir dans un
+fichier `.env.local` :
+
+```
+VITE_SUPABASE_URL=https://<projet>.supabase.co
+VITE_SUPABASE_ANON_KEY=<clé anon publique du projet>
+```
+
+La clé « anon » est une clé publique (protégée par les policies RLS côté base), pas un
+secret à garder confidentiel.
+
+Pour lancer la suite `npm run test:rls`, un fichier `.env.test.local` (non versionné)
+doit fournir `SUPABASE_URL`, `SUPABASE_ANON_KEY` et les mots de passe de deux comptes de
+test dédiés (`rls-test-a@keskom-test.local` / `rls-test-b@keskom-test.local`).
+
+## Déploiement
+
+Déployé automatiquement par Vercel à chaque push sur `main`.
+
+## Documentation technique
+
+Les décisions d'architecture, le schéma Supabase détaillé et l'historique des bugs
+corrigés sont documentés dans [`CLAUDE.md`](./CLAUDE.md) — pensé pour permettre à un
+assistant (ou une nouvelle personne) de reprendre le projet sans re-découvrir les mêmes
+pièges.

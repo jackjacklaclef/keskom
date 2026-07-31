@@ -7,7 +7,7 @@ mêmes pièges.
 
 ## Architecture générale
 
-- Tout le front-end vit dans un seul fichier `src/App.tsx` (~7500 lignes).
+- Tout le front-end vit dans un seul fichier `src/App.tsx` (~8200 lignes).
 - Client Supabase : **pas** le package npm installé dans `src/lib/supabaseClient.ts`
   (mort, jamais importé). App.tsx charge son propre client via un `<script>` CDN
   (`getSupabase()`, cache la *promesse* elle-même — voir bugs ci-dessous).
@@ -16,6 +16,13 @@ mêmes pièges.
   `isDemo` pour choisir le chemin local vs Supabase.
 - Version affichée dans le footer de la sidebar = sha git court, injecté au build via
   `vite.config.ts` (`__APP_VERSION__`).
+- PWA (`vite-plugin-pwa`) : manifest + service worker générés au build (`generateSW`).
+- Synchronisation temps réel via **Supabase Realtime** (`postgres_changes`) sur les
+  recettes (`recipes`, `recipe_ingredients`, `recipe_steps`, `recipe_family_shares`,
+  `recipe_variants`) et sur le planning (`meal_plans` filtré par famille active,
+  `meal_plan_meals`, `meal_plan_meal_recipes`). **Non couvert par Realtime** :
+  `family_members` (avatar, appétit, rôle) — un changement fait par un autre membre
+  n'apparaît qu'au rechargement.
 
 ## Schéma Supabase (tables clés)
 
@@ -24,16 +31,40 @@ mêmes pièges.
   plusieurs familles, l'appartenance vit uniquement dans `family_members`.
 - `families` / `family_members` — un profil peut appartenir à plusieurs familles.
   `family_members.profile_id` peut être `null` (membre sans compte app, juste un nom).
+  Colonnes personnelles-mais-visibles-en-famille stockées ici (pas sur `profiles`, dont
+  la RLS est self-only et bloquerait la lecture par les autres membres) :
+  - `avatar_emoji` — avatar emoji (voir « Fonctionnalités ajoutées après la migration »).
+  - `appetite` ∈ `small|medium|large` (Moineaux ×0.8 / Normal ×1 / Vorace ×1.3),
+    posé par `set_my_appetite` (soi-même) ou `assign_member_appetite` (pour un tiers,
+    verrouillé dès qu'il est renseigné par le titulaire du compte — voir plus bas).
+  - `role` ∈ `admin|member` — co-admin **réellement persisté** (colonne réelle, plus
+    de simulation locale). Seul le propriétaire de la famille (comparaison avec
+    `families.owner_profile_id`, jamais la colonne `role`) peut gérer les membres
+    (promouvoir, retirer, régénérer le code, ajouter) : un co-admin promu obtient le
+    badge « Admin » mais **n'hérite pas** de ces droits — choix de scope délibéré pour
+    ne pas avoir à refondre le modèle de permissions RLS (owner-only) à cette occasion.
 - `recipes` / `recipe_ingredients` / `recipe_steps` / `recipe_variants` /
   `recipe_family_shares` — recettes globales (catalogue partagé) ou privées/familiales.
   `scope` ∈ `global|private|family`. Partage vers une famille *supplémentaire* (au-delà
   de la famille "propriétaire") via `recipe_family_shares`.
+  - `recipe_steps.timer_seconds` / `.media_url` — minuteur et photo par étape (existaient
+    en base depuis le début, jamais exploités avant d'être câblés côté UI). La photo est
+    hébergée dans le bucket Storage `recipe-step-photos` (public en lecture directe par
+    URL ; écriture réservée aux utilisateurs authentifiés). Pas de policy `SELECT`
+    explicite sur `storage.objects` pour ce bucket : un bucket `public=true` sert déjà
+    les objets par URL sans passer par RLS, une policy `SELECT` n'aurait fait qu'exposer
+    le *listing* complet du bucket (repéré et supprimé via l'advisor de sécurité).
 - `ingredients` / `ingredient_categories` / `recipe_categories` / `units` — référentiels,
   lecture publique. `ingredients` a des policies INSERT/DELETE ouvertes à tout
   authentifié (catalogue partagé, pas de notion de propriétaire — comme avant la
   migration, en local).
 - `meal_plans` (un par famille+date) → `meal_plan_meals` (un par type de repas ce
-  jour-là, avec `status`) → `meal_plan_meal_recipes` (recettes du repas).
+  jour-là, avec `status`) → `meal_plan_meal_recipes` (recettes du repas) +
+  `meal_plan_meal_attendees` (membres présents à ce repas — `member_id`, remplacement
+  complet à chaque sauvegarde). Un nouveau créneau sans `attendeeIds` explicite est
+  peuplé par défaut avec **tous** les membres de la famille active. La liste de courses
+  pondère chaque repas par la somme des multiplicateurs d'appétit des présents plutôt
+  qu'un simple headcount.
 - `shopping_list_items`, `week_templates` — créées pendant la migration, n'existaient
   pas avant (pas d'équivalent local-storage).
 - `diets` (référentiel, 9 régimes) / `profile_diets` (many-to-many) /
@@ -81,20 +112,78 @@ plus simple et plus sûr à maintenir que des upserts fins.
    déconnexion. Corrigé avec `position: sticky; top:0; height:100vh` sur le `<nav>`.
 9. **Favicon 404 + meta iOS dépréciée** — `favicon.ico` manquant (généré via `sips`),
    `apple-mobile-web-app-capable` sans l'équivalent standard `mobile-web-app-capable`.
+10. **Bucket Storage avec policy `SELECT` trop permissive** — la policy publique posée
+    sur `recipe-step-photos` autorisait le *listing* complet du bucket (`storage.objects`
+    list), repérée par l'advisor de sécurité Supabase. Un bucket `public=true` sert déjà
+    les objets par URL directe sans RLS ; la policy ne servait donc qu'à exposer le
+    listing, jamais utilisé côté app. Supprimée.
 
 ## Fonctionnalités ajoutées pendant la migration
 
 - Famille : ajout de membre par email (RPC `add_family_member_by_email`), ajout de
   membre sans compte (juste un nom), retrait de membre, rejoindre par code.
-  **Non fait** : promotion admin (`handlePromoteMember`) reste locale-only — pas de
-  colonne `role` en base, admin = propriétaire uniquement. Le bouton fonctionne
-  visuellement mais l'effet disparaît au rechargement.
-- Recettes : CRUD complet, variantes, partage multi-famille, **étapes de recette**
-  (v1 : titre+texte+ordre, pas de timer/photo) avec un "Mode cuisine" pas-à-pas.
+- Recettes : CRUD complet, variantes, partage multi-famille, étapes de recette avec un
+  "Mode cuisine" pas-à-pas.
 - Régime alimentaire / allergies / aliments non appréciés : persistés en base
   (auparavant hardcodés à `[]` au chargement, silencieusement ignorés à l'écriture).
   Limite connue : un refresh de token Supabase en tâche de fond pourrait réinitialiser
   ces champs localement le temps d'un rechargement (cas limite rare).
+
+## Fonctionnalités ajoutées après la migration
+
+- **Présence par repas** — chaque créneau de repas a une liste de présents
+  (`meal_plan_meal_attendees`), choisis dans la modale via des tags multi-sélection ;
+  un tag « Tout le monde » remplace l'affichage individuel quand tous sont présents et
+  c'est la sélection par défaut sur un nouveau créneau.
+- **Avatars emoji** — 43 emojis (nourriture, groupés par famille : fruits, légumes,
+  plats & snacks, sucré & boissons) remplacent l'initiale par défaut. Choix personnel
+  (`set_my_avatar`, RPC `SECURITY DEFINER`) ou posé par l'admin pour un membre sans
+  compte (`family_members.avatar_emoji` en écriture directe, déjà couvert par la policy
+  owner-only existante). Sélecteur présent dans la fiche Famille et dans le Compte.
+- **Appétit par membre** — Moineaux / Normal / Vorace (×0.8 / ×1 / ×1.3), posé par
+  soi-même ou par un tiers avec verrouillage dès que le titulaire du compte l'a
+  renseigné (décision produit explicite : éviter qu'un membre écrase le choix d'un
+  autre). Pondère les quantités de la liste de courses générée.
+- **Co-admin persistant** — voir `family_members.role` ci-dessus. Le bouton
+  "Promouvoir admin" écrit réellement en base désormais (avant : simulation locale
+  perdue au rechargement).
+- **Étapes de recette : minuteur + photo** — champ minutes → `timer_seconds`,
+  upload photo → bucket `recipe-step-photos` → `media_url`. Le "Mode cuisine" affiche
+  un vrai décompte (démarrer/pause/réinitialiser, remonté à chaque étape via `key`) et
+  la photo de l'étape.
+- **Supabase Realtime** — voir section Architecture générale.
+- **Suite de tests RLS automatisée + hooks Claude Code** — voir section Outillage.
+- **Recettes globales chinoises (seed)** — 6 recettes (Poulet Kung Pao, Brocolis à
+  l'ail, Pommes de terre sautées à l'aigre-piquant, Tofu braisé aux oignons verts, Porc
+  braisé façon Bazi Rou, Wok sec ailes de poulet et crevettes) insérées en `scope
+  global` par SQL direct (contourne la policy INSERT `owner_profile_id =
+  current_profile_id()`, comme tout le contenu de seed). Traduites/adaptées depuis des
+  recettes réelles de xiachufang.com (quantités vagues type « à volonté » converties en
+  quantités concrètes). A enrichi le référentiel `ingredients` d'une trentaine de
+  produits de cuisine chinoise (sauces, épices, tofu...).
+
+## Outillage — hooks Claude Code
+
+Configurés dans `.claude/settings.local.json` (non versionné) :
+
+- **`PostToolUse` sur `mcp__claude_ai_Supabase__apply_migration`** →
+  `scripts/rls-hook.sh` : relance la suite de régression RLS (`scripts/test-rls.mjs`,
+  `npm run test:rls`) après **chaque** migration appliquée, et bloque (`decision:
+  "block"`) avec le détail des échecs si une policy casse quelque chose (récursion,
+  `with_check` tautologique, policy manquante...). Suite pilotée par deux comptes de
+  test jetables (`rls-test-a@keskom-test.local` / `rls-test-b@keskom-test.local`,
+  insérés directement dans `auth.users`), credentials dans `.env.test.local` (gitignore).
+- **`Stop` → `scripts/auto-sync.sh`** : à la fin de chaque réponse, commit puis push
+  automatique vers `origin/main` si des changements sont présents — mais seulement si
+  `npm run build` passe (sinon commit local seul, push annulé pour ne pas casser le
+  déploiement Vercel).
+- **`Stop` → `scripts/doc-sync-hook.sh`** : à la fin de chaque réponse, invite Claude à
+  vérifier si ce tour a introduit une fonctionnalité ou une décision notable et, si
+  oui, à mettre à jour ce fichier (et le README si ça concerne l'usage). Utilise
+  `stop_hook_active` pour ne bloquer qu'une fois par tour et éviter une boucle infinie.
+  **Ce fichier doit donc rester à jour en continu** : si tu le lis et qu'il semble
+  décalé par rapport au code, c'est que le hook n'a pas été respecté sur un tour donné
+  — corrige-le à l'occasion plutôt que de laisser la dérive s'accumuler.
 
 ## Notes diverses
 
@@ -103,5 +192,5 @@ plus simple et plus sûr à maintenir que des upserts fins.
   (pas d'environnement de dev séparé) — toujours vérifier via `execute_sql` en
   simulant le rôle `authenticated` + `request.jwt.claims` avant de considérer un
   correctif RLS comme acquis.
-- `recipe_steps` existe en base depuis le début du projet mais n'avait aucune UI avant
-  cette session — pas une régression, juste jamais construit.
+- `recipe_steps` existe en base depuis le début du projet ; le minuteur et la photo par
+  étape ont été câblés après coup (colonnes déjà présentes, jamais exploitées avant).
