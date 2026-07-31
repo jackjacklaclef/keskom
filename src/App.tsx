@@ -1099,14 +1099,17 @@ const App = () => {
   const mainAppVisible = currentUser && !needsFamilySetup && !familiesLoading;
 
   // Visite guidée : une fois par utilisateur (par navigateur), à la première arrivée sur l'app principale.
+  // Exception — le compte démo la réaffiche à chaque connexion : il sert de vitrine à des
+  // visiteurs différents à chaque essai, pas à un utilisateur récurrent.
   useEffect(() => {
     if (!mainAppVisible || !currentUser) return;
+    if (currentUser.id === "demo") { setShowOnboarding(true); return; }
     const seen = loadFromStorage(STORAGE_KEYS.onboardingSeen, []);
     if (!seen.includes(currentUser.id)) setShowOnboarding(true);
   }, [mainAppVisible, currentUser?.id]);
 
   const handleFinishOnboarding = () => {
-    if (currentUser) {
+    if (currentUser && currentUser.id !== "demo") {
       const seen = loadFromStorage(STORAGE_KEYS.onboardingSeen, []);
       if (!seen.includes(currentUser.id)) saveToStorage(STORAGE_KEYS.onboardingSeen, [...seen, currentUser.id]);
     }

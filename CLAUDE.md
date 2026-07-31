@@ -287,9 +287,13 @@ plus simple et plus sûr à maintenir que des upserts fins.
   Supabase) évite qu'elle ne se réaffiche — choix délibéré pour rester cohérent avec le
   reste des préférences purement locales (`darkMode`) et éviter une migration de schéma
   pour une donnée non critique (revers : le flag est par navigateur, pas par compte —
-  un même utilisateur sur un nouvel appareil la reverra une fois). Rejouable à tout
-  moment via un bouton « Revoir la visite guidée » dans Mon compte (`onReplayOnboarding`
-  dans `viewProps.account`), qui contourne le flag sans le modifier.
+  un même utilisateur sur un nouvel appareil la reverra une fois).
+  **Exception explicite pour le compte démo** : `currentUser.id === "demo"` contourne le
+  flag et réaffiche la visite à *chaque* connexion (jamais écrite dans
+  `onboardingSeen`) — le compte démo sert de vitrine à des visiteurs différents à chaque
+  essai, pas à un utilisateur récurrent qu'on ennuierait en répétant le tour.
+  Rejouable à tout moment via un bouton « Revoir la visite guidée » dans Mon compte
+  (`onReplayOnboarding` dans `viewProps.account`), qui contourne le flag sans le modifier.
   **Ton volontairement décontracté (tutoiement)**, tranchant avec le reste de l'app qui
   vouvoie partout ailleurs — demande explicite pour ce moment d'accueil précis, à ne
   pas généraliser au reste des textes ni "corriger" par cohérence.
