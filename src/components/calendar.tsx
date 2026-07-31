@@ -654,7 +654,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, rece
                         </button>
                       ))}
                       <button type="button"
-                        onClick={() => { setShowWeekTemplates(false); onNavigate("preferences"); }}
+                        onClick={() => { setShowWeekTemplates(false); onNavigate("templates"); }}
                         style={{ display: "flex", alignItems: "center", gap: "0.4rem", width: "100%", padding: "0.55rem 0.85rem", background: "var(--paper-sunken)", border: "none", borderTop: weekTemplates.length > 0 ? "1px solid var(--line)" : "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", color: "var(--clay)", fontWeight: 600 }}
                         onMouseEnter={(e) => e.currentTarget.style.background = "var(--clay-wash)"}
                         onMouseLeave={(e) => e.currentTarget.style.background = "var(--paper-sunken)"}>
@@ -877,7 +877,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, rece
                             {tpl.name}
                           </button>
                         ))}
-                        <button type="button" onClick={() => { setShowWeekTemplates(false); onNavigate("preferences"); }}
+                        <button type="button" onClick={() => { setShowWeekTemplates(false); onNavigate("templates"); }}
                           style={{ display: "flex", alignItems: "center", gap: "0.4rem", width: "100%", padding: "0.55rem 0.85rem", background: "var(--paper-sunken)", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", color: "var(--clay)", fontWeight: 600 }}
                           onMouseEnter={(e) => e.currentTarget.style.background = "var(--clay-wash)"}
                           onMouseLeave={(e) => e.currentTarget.style.background = "var(--paper-sunken)"}>

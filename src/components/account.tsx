@@ -4,7 +4,6 @@ import { colors, space, radius } from "../theme";
 import { NEW_MEMBER_SENTINEL, ingredientCategories, AVATAR_EMOJI_GROUPS, DIET_OPTIONS } from "../constants";
 import { Modal, ModalHeader, Field, TagInput, Icon, CategoryIcon, CategoryDot, EmptyState } from "./ui";
 import { PrivacyModal } from "./privacy";
-import { TemplateGrid, WeekTemplateEditor, ApplyTemplateModal } from "./templates";
 
 export const MemberModal = ({ member, onClose, onSave }) => {
   const [name, setName] = useState(member?.name || "");
@@ -205,14 +204,25 @@ export const AllergyPicker = (props) => <IngredientRestrictionPicker {...props} 
 // ACCOUNT VIEW
 // ============================================================
 
-export const AccountView = ({ currentUser, activeFamily, onLogout, onDeleteAccount, onNavigate, onSetMyAvatar }) => {
+export const AccountView = ({ currentUser, activeFamily, ingredients, onLogout, onDeleteAccount, onUpdateUserProfile, onSetMyAvatar }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [showAllergyPicker, setShowAllergyPicker] = useState(false);
+  const [showDislikePicker, setShowDislikePicker] = useState(false);
   const isDemo = currentUser.id === "demo";
   const myAvatarEmoji = activeFamily?.members.find((m) => m.userId === currentUser.id)?.avatarEmoji;
+
+  const allergies = currentUser?.allergies || [];
+  const dislikes = currentUser?.dislikes || [];
+  const diets = currentUser?.diets || [];
+
+  const toggleDiet = (id) => {
+    const next = diets.includes(id) ? diets.filter((d) => d !== id) : [...diets, id];
+    onUpdateUserProfile({ diets: next });
+  };
 
   return (
     <div>
@@ -286,6 +296,104 @@ export const AccountView = ({ currentUser, activeFamily, onLogout, onDeleteAccou
         </div>
       </div>
 
+      {/* Régime alimentaire */}
+      <div className="mp-card" style={{ marginBottom: space.xl }}>
+        <h3 className="mp-h3" style={{ marginBottom: space.md }}>Régime alimentaire</h3>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+          {DIET_OPTIONS.map((diet) => {
+            const active = diets.includes(diet.id);
+            return (
+              <button key={diet.id} type="button" onClick={() => toggleDiet(diet.id)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "0.3rem",
+                  padding: "0.3rem 0.65rem", borderRadius: radius.pill, cursor: "pointer",
+                  fontFamily: "inherit", fontSize: "0.78rem", fontWeight: active ? 600 : 400,
+                  border: `1.5px solid ${active ? "var(--sage)" : "var(--line)"}`,
+                  background: active ? "var(--sage-wash)" : "transparent",
+                  color: active ? "var(--sage)" : "var(--ink-soft)",
+                  transition: "all 100ms",
+                }}>
+                <CategoryIcon icon={diet.icon} size={14} color={active ? "var(--sage)" : "var(--ink-soft)"} />
+                <span>{diet.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Allergies */}
+      <div className="mp-card" style={{ marginBottom: space.xl }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+          <h3 className="mp-h3">Allergies & intolérances</h3>
+          <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => setShowAllergyPicker(true)}>
+            <Icon name="edit" size={13} /> Modifier
+          </button>
+        </div>
+        {allergies.length === 0
+          ? <p className="mp-small mp-text-faint">Aucune allergie renseignée</p>
+          : <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+              {allergies.map((a, i) => <AllergyBadge key={i} allergy={a} ingredients={ingredients} />)}
+            </div>
+        }
+      </div>
+
+      {/* Aliments non appréciés */}
+      <div className="mp-card" style={{ marginBottom: space.xl }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+          <div>
+            <h3 className="mp-h3">Aliments non appréciés</h3>
+            <p className="mp-micro mp-text-faint">Pas d'allergie, mais vous préférez éviter</p>
+          </div>
+          <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => setShowDislikePicker(true)}>
+            <Icon name="edit" size={13} /> Modifier
+          </button>
+        </div>
+        {dislikes.length === 0
+          ? <p className="mp-small mp-text-faint">Aucun aliment renseigné</p>
+          : <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+              {dislikes.map((d, i) => (
+                <IngredientRestrictionBadge key={i} item={d} ingredients={ingredients} mode="dislike" />
+              ))}
+            </div>
+        }
+      </div>
+
+      {/* Règles personnalisées — placeholder backend */}
+      <div className="mp-card" style={{ marginBottom: space.xl }}>
+        <h3 className="mp-h3" style={{ marginBottom: "0.4rem" }}>Règles personnalisées</h3>
+        <div style={{
+          padding: "0.75rem 0.9rem", borderRadius: radius.sm,
+          background: "var(--paper-sunken)", border: "1px dashed var(--line)",
+        }}>
+          <p className="mp-small mp-text-faint" style={{ textAlign: "center" }}>
+            Les règles personnalisées seront disponibles avec le backend.
+          </p>
+          <p className="mp-micro mp-text-faint" style={{ textAlign: "center", marginTop: "0.25rem" }}>
+            Elles permettront la génération automatique de menus à partir des préférences et allergies de la famille.
+          </p>
+        </div>
+      </div>
+
+      {showAllergyPicker && (
+        <IngredientRestrictionPicker
+          mode="allergy"
+          current={allergies}
+          ingredients={ingredients}
+          onClose={() => setShowAllergyPicker(false)}
+          onSave={(v) => onUpdateUserProfile({ allergies: v })}
+        />
+      )}
+
+      {showDislikePicker && (
+        <IngredientRestrictionPicker
+          mode="dislike"
+          current={dislikes}
+          ingredients={ingredients}
+          onClose={() => setShowDislikePicker(false)}
+          onSave={(v) => onUpdateUserProfile({ dislikes: v })}
+        />
+      )}
+
       {/* Mes données RGPD */}
       <div className="mp-card" style={{ marginBottom: space.xl }}>
         <h3 className="mp-h3" style={{ marginBottom: "0.35rem" }}>Mes données</h3>
@@ -296,10 +404,6 @@ export const AccountView = ({ currentUser, activeFamily, onLogout, onDeleteAccou
           <button type="button" className="mp-btn mp-btn-secondary" style={{ justifyContent: "flex-start" }}
             onClick={() => setShowPrivacy(true)}>
             <Icon name="sliders" size={14} /> Politique de confidentialité
-          </button>
-          <button type="button" className="mp-btn mp-btn-secondary" style={{ justifyContent: "flex-start" }}
-            onClick={() => onNavigate?.("preferences")}>
-            <Icon name="edit" size={14} /> Modifier mes préférences alimentaires
           </button>
         </div>
       </div>
@@ -469,322 +573,3 @@ export const NotificationsView = () => (
     <EmptyState title="Aucune notification" hint="Les notifications apparaîtront ici" />
   </div>
 );
-
-// ============================================================
-// PREFERENCES VIEW
-// ============================================================
-
-export const PreferencesView = ({ currentUser, ingredients, weekTemplates, recipes, recentRecipeIds,
-  activeFamily, onAddIngredient, onDeleteIngredient,
-  onSaveTemplate, onDeleteTemplate, onApplyTemplate, onUpdateUserProfile,
-}) => {
-  const [selectedCategory, setSelectedCategory] = useState("legumes");
-  const [search, setSearch] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newCategory, setNewCategory] = useState("legumes");
-  const [editingTemplate, setEditingTemplate] = useState(undefined);
-  const [applyingTemplate, setApplyingTemplate] = useState(null);
-  const [showAllergyPicker, setShowAllergyPicker] = useState(false);
-  const [showDislikePicker, setShowDislikePicker] = useState(false);
-
-  const allergies = currentUser?.allergies || [];
-  const dislikes = currentUser?.dislikes || [];
-  const diets = currentUser?.diets || [];
-  const rules = currentUser?.rules || [];
-
-  const toggleDiet = (id) => {
-    const next = diets.includes(id) ? diets.filter((d) => d !== id) : [...diets, id];
-    onUpdateUserProfile({ diets: next });
-  };
-
-  const familyTemplates = weekTemplates.filter((t) => t.scope === "family" || (!t.scope && t.familyId === activeFamily?.id));
-  const userTemplates = weekTemplates.filter((t) => t.scope === "user");
-
-  const filteredIngredients = ingredients.filter(
-    (ing) => ing.category === selectedCategory && ing.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleAddNew = () => {
-    if (!newName.trim()) return;
-    onAddIngredient({ id: Date.now().toString(), name: newName.trim(), category: newCategory });
-    setNewName(""); setShowAddForm(false);
-  };
-
-  const TemplateSection = ({ title, templates, hint }) => (
-    <div style={{ marginBottom: space.xl }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: space.md, flexWrap: "wrap", gap: "0.6rem" }}>
-        <div>
-          <h3 className="mp-h3">{title}</h3>
-          {hint && <p className="mp-small mp-text-soft" style={{ marginTop: "0.15rem" }}>{hint}</p>}
-        </div>
-        <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm"
-          onClick={() => setEditingTemplate({ scope: title.includes("famille") ? "family" : "user" })}
-          disabled={editingTemplate !== undefined}>
-          <Icon name="plus" size={13} /> Nouveau
-        </button>
-      </div>
-
-      {editingTemplate !== undefined && ((title.includes("famille") && editingTemplate?.scope === "family") || (title.includes("personnel") && editingTemplate?.scope === "user") || (editingTemplate?.id && templates.some((t) => t.id === editingTemplate.id))) && (
-        <div style={{ marginBottom: space.lg }}>
-          <WeekTemplateEditor
-            template={editingTemplate?.id ? editingTemplate : null}
-            recipes={recipes} recentRecipeIds={recentRecipeIds} activeFamily={activeFamily}
-            onSave={(tpl) => { onSaveTemplate({ ...tpl, scope: editingTemplate?.scope || tpl.scope }); setEditingTemplate(undefined); }}
-            onCancel={() => setEditingTemplate(undefined)}
-          />
-        </div>
-      )}
-
-      {templates.length === 0 && editingTemplate === undefined && (
-        <EmptyState title="Aucun modèle" hint="Créez un modèle pour planifier vos semaines rapidement." />
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: space.lg }}>
-        {templates.map((tpl) => {
-          const filledCount = tpl.slots.length;
-          return (
-            <div key={tpl.id} className="mp-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: space.md, flexWrap: "wrap", gap: "0.5rem" }}>
-                <div>
-                  <h3 className="mp-h3">{tpl.name}</h3>
-                  <span className="mp-badge mp-badge-neutral" style={{ marginTop: "0.3rem" }}>{filledCount} créneau{filledCount > 1 ? "x" : ""}</span>
-                </div>
-                <div style={{ display: "flex", gap: "0.4rem" }}>
-                  <button type="button" className="mp-btn mp-btn-primary mp-btn-sm" onClick={() => setApplyingTemplate(tpl)}>
-                    <Icon name="calendar" size={13} /> Appliquer
-                  </button>
-                  <button type="button" className="mp-btn mp-btn-ghost mp-btn-icon" onClick={() => setEditingTemplate(tpl)} aria-label="Modifier">
-                    <Icon name="edit" size={14} />
-                  </button>
-                  <button type="button" className="mp-btn mp-btn-danger mp-btn-icon" onClick={() => onDeleteTemplate(tpl.id)} aria-label="Supprimer">
-                    <Icon name="trash" size={14} />
-                  </button>
-                </div>
-              </div>
-              <TemplateGrid slots={tpl.slots} recipes={recipes} readOnly />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  return (
-    <div>
-      <div className="mp-view-header">
-        <h1 className="mp-h1">Préférences</h1>
-      </div>
-
-      {/* Mon profil */}
-      <div className="mp-card" style={{ marginBottom: space.xl }}>
-        <h3 className="mp-h3" style={{ marginBottom: space.md }}>Mon profil</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-
-          {/* Identité */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="mp-small mp-text-soft">Nom</span>
-              <span className="mp-small">{currentUser?.name}</span>
-            </div>
-            <hr className="mp-divider" />
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="mp-small mp-text-soft">Email</span>
-              <span className="mp-small">{currentUser?.email}</span>
-            </div>
-          </div>
-
-          <hr className="mp-divider" />
-
-          {/* Régimes alimentaires */}
-          <div>
-            <p className="mp-small" style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Régime alimentaire</p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-              {DIET_OPTIONS.map((diet) => {
-                const active = diets.includes(diet.id);
-                return (
-                  <button key={diet.id} type="button" onClick={() => toggleDiet(diet.id)}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: "0.3rem",
-                      padding: "0.3rem 0.65rem", borderRadius: radius.pill, cursor: "pointer",
-                      fontFamily: "inherit", fontSize: "0.78rem", fontWeight: active ? 600 : 400,
-                      border: `1.5px solid ${active ? "var(--sage)" : "var(--line)"}`,
-                      background: active ? "var(--sage-wash)" : "transparent",
-                      color: active ? "var(--sage)" : "var(--ink-soft)",
-                      transition: "all 100ms",
-                    }}>
-                    <CategoryIcon icon={diet.icon} size={14} color={active ? "var(--sage)" : "var(--ink-soft)"} />
-                    <span>{diet.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <hr className="mp-divider" />
-
-          {/* Allergies */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <p className="mp-small" style={{ fontWeight: 600 }}>Allergies & intolérances</p>
-              <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => setShowAllergyPicker(true)}>
-                <Icon name="edit" size={13} /> Modifier
-              </button>
-            </div>
-            {allergies.length === 0
-              ? <p className="mp-small mp-text-faint">Aucune allergie renseignée</p>
-              : <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-                  {allergies.map((a, i) => <AllergyBadge key={i} allergy={a} ingredients={ingredients} />)}
-                </div>
-            }
-          </div>
-
-          <hr className="mp-divider" />
-
-          {/* Aliments non appréciés */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <div>
-                <p className="mp-small" style={{ fontWeight: 600 }}>Aliments non appréciés</p>
-                <p className="mp-micro mp-text-faint">Pas d'allergie, mais vous préférez éviter</p>
-              </div>
-              <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => setShowDislikePicker(true)}>
-                <Icon name="edit" size={13} /> Modifier
-              </button>
-            </div>
-            {dislikes.length === 0
-              ? <p className="mp-small mp-text-faint">Aucun aliment renseigné</p>
-              : <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-                  {dislikes.map((d, i) => (
-                    <IngredientRestrictionBadge key={i} item={d} ingredients={ingredients} mode="dislike" />
-                  ))}
-                </div>
-            }
-          </div>
-
-          <hr className="mp-divider" />
-
-          {/* Règles personnalisées — placeholder backend */}
-          <div>
-            <p className="mp-small" style={{ fontWeight: 600, marginBottom: "0.4rem" }}>Règles personnalisées</p>
-            <div style={{
-              padding: "0.75rem 0.9rem", borderRadius: radius.sm,
-              background: "var(--paper-sunken)", border: "1px dashed var(--line)",
-            }}>
-              <p className="mp-small mp-text-faint" style={{ textAlign: "center" }}>
-                Les règles personnalisées seront disponibles avec le backend.
-              </p>
-              <p className="mp-micro mp-text-faint" style={{ textAlign: "center", marginTop: "0.25rem" }}>
-                Elles permettront la génération automatique de menus à partir des préférences et allergies de la famille.
-              </p>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Semaines types */}
-      <div style={{ borderTop: "1px solid var(--line)", paddingTop: space.xl, marginBottom: space.xl }}>
-        <h2 className="mp-h2" style={{ marginBottom: space.lg }}>Semaines types</h2>
-        <TemplateSection
-          title={`Modèles de la famille (${activeFamily?.name || "—"})`}
-          templates={familyTemplates}
-          hint="Visibles par tous les membres de la famille"
-        />
-        <TemplateSection
-          title="Modèles personnels"
-          templates={userTemplates}
-          hint="Visibles uniquement par vous"
-        />
-      </div>
-
-      {/* Ingrédients */}
-      <div style={{ borderTop: "1px solid var(--line)", paddingTop: space.xl }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: space.lg, flexWrap: "wrap", gap: "0.6rem" }}>
-          <h2 className="mp-h2">Ingrédients</h2>
-          <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" onClick={() => setShowAddForm((v) => !v)}>
-            <Icon name="plus" size={13} /> Nouvel ingrédient
-          </button>
-        </div>
-
-        {showAddForm && (
-          <div className="mp-card" style={{ marginBottom: space.lg, background: "var(--paper-sunken)" }}>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
-              <input className="mp-input" style={{ flex: "1 1 200px" }} value={newName}
-                onChange={(e) => setNewName(e.target.value)} placeholder="Nom de l'ingrédient" />
-              <select className="mp-select" style={{ width: "auto" }} value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
-                {ingredientCategories.map((cat) => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-              <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" onClick={() => setShowAddForm(false)}>Annuler</button>
-              <button type="button" className="mp-btn mp-btn-primary mp-btn-sm" onClick={handleAddNew} disabled={!newName.trim()}>Ajouter</button>
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: space.md }}>
-          {ingredientCategories.map((cat) => (
-            <button key={cat.id} type="button" onClick={() => setSelectedCategory(cat.id)} className="mp-small"
-              style={{ padding: "0.3rem 0.65rem", borderRadius: radius.pill, border: `1px solid ${cat.hex}`, background: selectedCategory === cat.id ? cat.hex : "transparent", color: selectedCategory === cat.id ? "#fff" : cat.hex, cursor: "pointer", fontWeight: 500 }}>
-              {cat.label}
-            </button>
-          ))}
-        </div>
-
-        <input className="mp-input" style={{ maxWidth: "320px", marginBottom: space.md }} value={search}
-          onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un ingrédient..." />
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "0.5rem" }}>
-          {filteredIngredients.map((ingredient) => {
-            const category = ingredientCategories.find((c) => c.id === ingredient.category);
-            return (
-              <div key={ingredient.id} className="mp-card"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0.7rem" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }} className="mp-small">
-                  <CategoryDot hex={category.hex} />
-                  {ingredient.name}
-                </span>
-                <button type="button" onClick={() => onDeleteIngredient(ingredient.id)} aria-label={`Supprimer ${ingredient.name}`}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)", display: "flex" }}>
-                  <Icon name="x" size={13} />
-                </button>
-              </div>
-            );
-          })}
-          {filteredIngredients.length === 0 && (
-            <div style={{ gridColumn: "1 / -1" }}>
-              <EmptyState title="Aucun ingrédient dans cette catégorie" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {applyingTemplate && (
-        <ApplyTemplateModal template={applyingTemplate} recipes={recipes} mealPlans={[]}
-          onClose={() => setApplyingTemplate(null)}
-          onApply={(weekStart, mode) => { onApplyTemplate(applyingTemplate, weekStart, mode); setApplyingTemplate(null); }} />
-      )}
-
-      {showAllergyPicker && (
-        <IngredientRestrictionPicker
-          mode="allergy"
-          current={allergies}
-          ingredients={ingredients}
-          onClose={() => setShowAllergyPicker(false)}
-          onSave={(v) => onUpdateUserProfile({ allergies: v })}
-        />
-      )}
-
-      {showDislikePicker && (
-        <IngredientRestrictionPicker
-          mode="dislike"
-          current={dislikes}
-          ingredients={ingredients}
-          onClose={() => setShowDislikePicker(false)}
-          onSave={(v) => onUpdateUserProfile({ dislikes: v })}
-        />
-      )}
-    </div>
-  );
-};

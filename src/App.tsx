@@ -11,8 +11,10 @@ import { RecipesView } from "./components/recipes";
 import { ShoppingListView } from "./components/shopping";
 import { PrivacyView } from "./components/privacy";
 import { FamilySetupView, LoginView, RegisterView, ForgotPasswordView } from "./components/auth";
-import { AccountView, NotificationsView, PreferencesView } from "./components/account";
+import { AccountView, NotificationsView } from "./components/account";
 import { FamilyView } from "./components/family";
+import { IngredientsView } from "./components/ingredients";
+import { TemplatesView } from "./components/templates";
 
 import { getSupabase } from "./lib/supabaseClient";
 import {
@@ -1064,9 +1066,10 @@ const App = () => {
     calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [] },
     recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: isDemo ? initialRecipes : recipes.filter((r) => r.scope === "global"), ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
-    preferences: { currentUser, ingredients, weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate, onUpdateUserProfile: handleUpdateUserProfile },
+    ingredients: { ingredients, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient },
+    templates: { weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate },
     family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember, onSetMyAvatar: handleSetMyAvatar, onSetMemberAvatar: handleSetMemberAvatar, onSetMyAppetite: handleSetMyAppetite, onAssignMemberAppetite: handleAssignMemberAppetite },
-    account: { currentUser, activeFamily, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onNavigate: setCurrentView, onSetMyAvatar: handleSetMyAvatar },
+    account: { currentUser, activeFamily, ingredients, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateUserProfile: handleUpdateUserProfile, onSetMyAvatar: handleSetMyAvatar },
   };
 
   const renderView = () => {
@@ -1074,7 +1077,8 @@ const App = () => {
       case "calendar": return <CalendarView {...viewProps.calendar} />;
       case "recipes": return <RecipesView {...viewProps.recipes} />;
       case "shopping": return <ShoppingListView {...viewProps.shopping} />;
-      case "preferences": return <PreferencesView {...viewProps.preferences} />;
+      case "ingredients": return <IngredientsView {...viewProps.ingredients} />;
+      case "templates": return <TemplatesView {...viewProps.templates} />;
       case "family": return <FamilyView {...viewProps.family} />;
       case "notifications": return <NotificationsView />;
       case "privacy": return <PrivacyView onBack={() => setCurrentView("account")} />;

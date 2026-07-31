@@ -21,10 +21,10 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
 
   ```
   src/
-    App.tsx                    1137  composant App racine (state, handlers, routing)
+    App.tsx                    1141  composant App racine (state, handlers, routing)
     main.tsx                      9  point d'entrée Vite
     theme.tsx                   641  design tokens + GlobalStyle
-    constants.ts                162  constantes métier (catégories, régimes, etc.)
+    constants.ts                163  constantes métier (catégories, régimes, etc.)
     types.ts                     22  AppUser, AuthResult, AuthChangeCallback
     lib/
       supabaseClient.ts          47  client Supabase (getSupabase())
@@ -33,18 +33,33 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
       storage.ts                656  localStorage + démo + jeu de données mock
       dateUtils.ts               23  todayStr/getMondayOf/dateOfSlot
     components/
-      ui.tsx                    405  primitives UI génériques
+      ui.tsx                    413  primitives UI génériques
       layout.tsx                216  Sidebar/MobileDrawer/FamilySelector
       auth.tsx                  370  écrans de connexion/inscription
       privacy.tsx                55  politique de confidentialité
-      account.tsx               790  compte, préférences, allergies
+      account.tsx               575  compte + profil (régime/allergies/aliments non appréciés)
       family.tsx                289  gestion de la famille
       shopping.tsx              297  liste de courses
-      templates.tsx             271  semaines types
+      templates.tsx             369  semaines types + écran dédié « Modèles »
+      ingredients.tsx            86  catalogue d'ingrédients (écran « Ingrédients »)
       recipeSelection.tsx       188  sélecteur de recette pour un créneau
       recipes.tsx               915  CRUD recettes, mode cuisine
       calendar.tsx             1144  planning (jour/semaine/mois)
   ```
+
+  **Écrans de paramétrage (réorganisés)** : avant, « Mon compte » et « Préférences »
+  affichaient tous les deux le nom/email (doublon) et il fallait naviguer entre les
+  deux pour éditer son profil alimentaire. Réorganisé en trois écrans sans
+  chevauchement : **Mon compte** (`AccountView`) porte tout le profil personnel —
+  identité, régime alimentaire, allergies, aliments non appréciés, règles
+  personnalisées (placeholder) — en plus de la gestion du compte (déconnexion,
+  suppression, RGPD) ; **Modèles** (`TemplatesView`, nouveau, dans `templates.tsx`)
+  est l'écran dédié aux semaines types, avant enterré en bas de Préférences ;
+  **Ingrédients** (`IngredientsView`, nouveau fichier `ingredients.tsx`) reprend
+  l'ancien écran Préférences recentré sur le seul catalogue d'ingrédients (décision :
+  renommer plutôt que fusionner dans Recettes, pour ne pas alourdir un fichier déjà
+  volumineux). `PreferencesView` a disparu, son contenu s'est réparti entre ces trois
+  écrans.
 
   Table de correspondance (contenu déplacé → fichier, avec le contexte de chaque
   décision) :
@@ -63,10 +78,11 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
   | `todayStr`/`getMondayOf`/`dateOfSlot` | `src/lib/dateUtils.ts` |
   | `FamilySetupView`/`LoginView`/`RegisterView`/`ForgotPasswordView` | `src/components/auth.tsx` |
   | `PrivacyModal`/`PrivacyView`/`PrivacyLink` | `src/components/privacy.tsx` |
-  | `AccountView`/`UserAvatar`/`EmojiAvatarPicker`/`NotificationsView`/`PreferencesView`/allergies-picker/`MemberModal` (mort) | `src/components/account.tsx` |
+  | `AccountView`/`UserAvatar`/`EmojiAvatarPicker`/`NotificationsView`/allergies-picker/`MemberModal` (mort) | `src/components/account.tsx` |
   | `FamilyView` | `src/components/family.tsx` |
   | `ShoppingListView` et sous-composants | `src/components/shopping.tsx` |
-  | `TemplateGrid`/`WeekTemplateEditor`/`ApplyTemplateModal` | `src/components/templates.tsx` |
+  | `TemplateGrid`/`WeekTemplateEditor`/`ApplyTemplateModal`/`TemplatesView` | `src/components/templates.tsx` |
+  | `IngredientsView` | `src/components/ingredients.tsx` |
   | `RecipeSelectionModal` | `src/components/recipeSelection.tsx` |
   | `RecipeModal`/`RecipeDetailModal`/`CookModeModal`/`StepTimer`/`RecipesView` | `src/components/recipes.tsx` |
   | `ClearWeekModal`/`ApplyTemplateModeModal`/`DuplicateWeekModal`/`AttendeeAvatarStack`/`DayPanel`/`CalendarView`/`QuickPlanModal` | `src/components/calendar.tsx` |
