@@ -223,6 +223,13 @@ plus simple et plus sûr à maintenir que des upserts fins.
     `TemplateGrid` et l'aperçu de `ApplyTemplateModal` affichent le statut, et
     `handleApplyTemplate` propage `slot.status` (au lieu de `"normal"` en dur) lors de
     l'application à une semaine réelle.
+12. **Sélecteur de catégorie de `RecipeModal` sans icône** (`src/components/recipes.tsx`,
+    section « Catégorie » de la modale de création/édition d'une recette) — affichait
+    `<span>{cat.icon}</span>`, c'est-à-dire la chaîne brute `"cat-main"`/`"cat-soup"`/...
+    en texte, au lieu de l'icône SVG correspondante. Toutes les autres apparitions de
+    `RECIPE_CATEGORIES` dans ce même fichier (liste des recettes, filtres, fiche détail...)
+    utilisaient déjà correctement `<CategoryIcon icon={cat.icon} size={N} color={cat.hex} />`
+    — seul ce sélecteur avait été oublié. Corrigé par simple remplacement, même pattern.
 
 ## Bugs connus, non corrigés
 
@@ -421,6 +428,24 @@ plus simple et plus sûr à maintenir que des upserts fins.
   Scope volontairement limité aux vues Semaine et Perso (mêmes axes que le point
   précédent) — pas de photo de recette sur la carte (aucun champ photo au niveau
   recette en base, seulement `recipe_steps.media_url` par étape).
+- **Icône de catégorie devant chaque nom de plat sur la carte de repas** (tour suivant,
+  demande explicite) — contrairement au point précédent (icône de *type de repas*,
+  Semaine/Perso uniquement), ceci ajoute l'icône de *catégorie de recette* (entrée/plat/
+  soupe/dessert...) devant chaque nom, et couvre cette fois **les trois rendus** de carte
+  (`DayPanel` vue Mois inclus, pas seulement Semaine/Perso — pas de raison de le limiter,
+  demande formulée sans restriction de vue). Nouveau composant local `RecipeNamesList`
+  (`src/components/calendar.tsx`, à côté de `AllergyWarningBadge`/`AttendeeAvatarStack`)
+  mutualisé entre les 3 sites plutôt que de dupliquer la logique une 3ᵉ fois — prend
+  `recipeIds`+`recipes`, résout chaque recette et sa `RECIPE_CATEGORIES` correspondante,
+  rend `<CategoryIcon icon={cat.icon} size={12} />` avant chaque nom, séparés par `, `.
+  Contourne la même limitation que `CategoryIcon`/`Icon` ne prenant pas réellement en
+  compte leur prop `color` (ignorée en silence par `Icon`, voir remarque plus haut sur
+  les icônes de type de repas) : la couleur par catégorie (`cat.hex`) est appliquée via
+  un `<span style={{color: cat.hex}}>` englobant plutôt que la prop, pour que
+  `currentColor` hérite correctement — même technique que pour l'icône de type de repas.
+- **Icônes de catégorie manquantes dans la modale de recette** — voir bug corrigé n°12
+  ci-dessus (repéré en creusant la demande précédente : le sélecteur de `RecipeModal`
+  affichait le nom brut de l'icône en texte plutôt que l'icône elle-même).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

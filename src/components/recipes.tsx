@@ -160,7 +160,7 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
             <button key={cat.id} type="button"
               className={`mp-recipe-cat-pill ${category === cat.id ? "selected" : ""}`}
               onClick={() => setCategory(cat.id)}>
-              <span>{cat.icon}</span>
+              <CategoryIcon icon={cat.icon} size={16} color={cat.hex} />
               <span>{cat.label}</span>
             </button>
           ))}

@@ -2,9 +2,9 @@ import { useState, useMemo, useRef } from "react";
 import React from "react";
 
 import { space, radius } from "../theme";
-import { MEAL_TYPES, DAYS_OF_WEEK, MONTHS } from "../constants";
+import { MEAL_TYPES, DAYS_OF_WEEK, MONTHS, RECIPE_CATEGORIES } from "../constants";
 import { todayStr, getMondayOf } from "../lib/dateUtils";
-import { Icon, Modal, ModalHeader, Field } from "./ui";
+import { Icon, Modal, ModalHeader, Field, CategoryIcon } from "./ui";
 import { RecipeSelectionModal } from "./recipeSelection";
 
 // Conflits allergène pour un repas : recoupe les ingrédients des recettes assignées
@@ -52,6 +52,33 @@ const AllergyWarningBadge = ({ conflicts }) => {
   return (
     <span title={title} style={{ display: "inline-flex", alignItems: "center", color: "var(--berry)", flexShrink: 0 }}>
       <Icon name="alert-triangle" size={13} />
+    </span>
+  );
+};
+
+// Noms des recettes d'un créneau, chacun précédé de l'icône de sa catégorie — repère le
+// type de plat (entrée/plat/dessert...) sans avoir à lire le texte.
+const RecipeNamesList = ({ recipeIds, recipes }) => {
+  const items = (recipeIds || []).map((id) => recipes.find((r) => r.id === id)).filter(Boolean);
+  if (items.length === 0) return null;
+  return (
+    <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>
+      {items.map((r, i) => {
+        const cat = RECIPE_CATEGORIES.find((c) => c.id === r.category);
+        return (
+          <React.Fragment key={r.id}>
+            {i > 0 && ", "}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+              {cat && (
+                <span style={{ color: cat.hex, display: "inline-flex", flexShrink: 0 }}>
+                  <CategoryIcon icon={cat.icon} size={12} />
+                </span>
+              )}
+              {r.name}
+            </span>
+          </React.Fragment>
+        );
+      })}
     </span>
   );
 };
@@ -405,7 +432,7 @@ export const DayPanel = ({
                     ? <span className="mp-small mp-text-faint">+ Ajouter</span>
                     : <>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                          <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4, paddingRight: "1.4rem" }}>{names.join(", ")}</span>
+                          <span style={{ paddingRight: "1.4rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} /></span>
                           <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
                         </div>
                         <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
@@ -947,7 +974,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                               ? <span className="mp-small mp-text-faint">+ Ajouter</span>
                               : <>
                                   <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                                    <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span>
+                                    <RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} />
                                     <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
                                   </div>
                                   <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
@@ -1148,7 +1175,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                           )}
                           {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
-                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} /></div><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
+                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} /><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} /></div><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
                         </button>
                       );
                     })}
