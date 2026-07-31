@@ -27,7 +27,7 @@ import {
   fetchIngredients, fetchRecipeCategoryMap, fetchIngredientCategoryMap, fetchUserPreferences,
   saveFoodRestrictions, saveDiets, fetchRecipesForUser, saveRecipeIngredients, saveRecipeSteps,
   fetchMealPlansForFamily, upsertMealSlot, fetchShoppingListForFamily, fetchWeekTemplatesForFamily,
-  fetchFamiliesForUser,
+  fetchFamiliesForUser, fetchFamilyAllergies,
 } from "./lib/dataLayer";
 import { todayStr, getMondayOf, dateOfSlot } from "./lib/dateUtils";
 
@@ -67,6 +67,9 @@ const App = () => {
   const [shoppingList, setShoppingList] = useState<any[]>(() => isDemo ? initialShoppingList : []);
   const [ingredients, setIngredients] = useState<any[]>(() => isDemo ? initialIngredients : []);
   const [weekTemplates, setWeekTemplates] = useState<any[]>(() => []);
+  // Allergies de tous les membres de la famille active, { [memberId]: [{type, id}] } —
+  // sert au contrôle ingrédients×allergies sur la carte de repas du planning.
+  const [realFamilyAllergies, setRealFamilyAllergies] = useState<Record<string, any[]>>({});
   const [showFab, setShowFab] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -227,6 +230,26 @@ const App = () => {
     })();
     return () => { cancelled = true; };
   }, [currentUser?.id, isDemo, activeFamily?.id]);
+
+  // ── Chargement des allergies de toute la famille active (comptes non-démo) ──
+  // Passe par le RPC get_family_allergies (RLS self-only sur profile_food_restrictions).
+  useEffect(() => {
+    if (!currentUser || isDemo || !activeFamily?.id) return;
+    let cancelled = false;
+    (async () => {
+      const allergies = await fetchFamilyAllergies(activeFamily.id);
+      if (!cancelled) setRealFamilyAllergies(allergies);
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser?.id, isDemo, activeFamily?.id]);
+
+  // Compte démo : famille locale à un seul membre, ses allergies sont déjà sur currentUser.
+  const familyAllergies = useMemo(() => {
+    if (!isDemo) return realFamilyAllergies;
+    const selfMember = activeFamily?.members.find((m: any) => m.userId === currentUser?.id);
+    if (!selfMember || !currentUser?.allergies?.length) return {};
+    return { [selfMember.memberId]: currentUser.allergies };
+  }, [isDemo, activeFamily, currentUser]);
 
   // ── Synchronisation temps réel du planning (Realtime) — comptes non-démo ──
   // Si un autre membre de la famille modifie le planning, on le voit sans recharger.
@@ -1065,7 +1088,7 @@ const App = () => {
   };
 
   const viewProps = {
-    calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [] },
+    calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [], ingredients, familyAllergies },
     recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: isDemo ? initialRecipes : recipes.filter((r) => r.scope === "global"), ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
     ingredients: { ingredients, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient },

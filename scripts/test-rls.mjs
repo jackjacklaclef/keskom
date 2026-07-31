@@ -85,6 +85,16 @@ async function main() {
     check("B cannot see A's personal week template", (tpl || []).length === 0);
   }
 
+  console.log("get_family_allergies (cross-member allergy visibility)");
+  if (famA) {
+    const { data, error } = await a.rpc("get_family_allergies", { p_family_id: famA.family_id });
+    check("A can read her own family's allergies", !error);
+    check("A sees her own fixture allergy (ingredient 9)", (data || []).some((r) => r.ingredient_id === 9));
+
+    const { data: dataAsB } = await b.rpc("get_family_allergies", { p_family_id: famA.family_id });
+    check("B gets nothing back for family A's allergies (not a member)", (dataAsB || []).length === 0);
+  }
+
   console.log("RPCs (join / invite chicken-and-egg regressions)");
   {
     const { error } = await a.rpc("join_family_by_code", { p_invite_code: "NOPE99" });

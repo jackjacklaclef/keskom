@@ -39,6 +39,8 @@ export const Icon = ({ name, size = 16 }) => {
     carrot: <><path d="M9.5 21C6 21 3 18 3 14.5c0-4 3.5-9 6.5-9s6.5 5 6.5 9c0 3.5-3 6.5-6.5 6.5Z" /><path d="M13 6c1-1.5 1-3 3-3M15 8c1.2-.8 1.3-2.2 3-2" /></>,
     // Grille 3×3 — modèles/semaines types
     grid: <><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="9.5" y="3" width="6" height="6" rx="1" /><rect x="16" y="3" width="5" height="6" rx="1" /><rect x="3" y="9.5" width="6" height="6" rx="1" /><rect x="9.5" y="9.5" width="6" height="6" rx="1" /><rect x="16" y="9.5" width="5" height="6" rx="1" /><rect x="3" y="16" width="6" height="5" rx="1" /><rect x="9.5" y="16" width="6" height="5" rx="1" /><rect x="16" y="16" width="5" height="5" rx="1" /></>,
+    // Triangle d'alerte — conflit allergène
+    "alert-triangle": <><path d="M12 3.5 2.5 20h19L12 3.5Z" /><path d="M12 9.5v5" /><path d="M12 18h.01" /></>,
     // Couvert stylisé — restaurant
     restaurant: <><path d="M7 3v5.5a2.5 2.5 0 0 0 5 0V3"/><line x1="9.5" y1="3" x2="9.5" y2="9"/><line x1="7" y1="6" x2="12" y2="6"/><line x1="9.5" y1="11" x2="9.5" y2="21"/><path d="M16 3c0 0 4 2 4 7s-4 7-4 7"/><line x1="16" y1="10" x2="20" y2="10"/><line x1="16" y1="17" x2="16" y2="21"/></>,
     // Cercle barré — pas de repas

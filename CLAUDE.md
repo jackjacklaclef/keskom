@@ -234,24 +234,31 @@ plus simple et plus sûr à maintenir que des upserts fins.
   volontairement pour garder le refactor à logique strictement inchangée — à corriger
   dans une session dédiée (ajouter `const [error, setError] = useState("")` et
   afficher le message, sur le modèle des autres écrans d'auth).
-- **Allergies des autres membres de la famille invisibles pour un compte réel**
-  (repéré en creusant une demande de contrôle ingrédients×allergies sur la carte de
-  repas du planning) — `FamilyView` (`src/components/family.tsx`, ~L.219-239) lit les
-  allergies d'un membre autre que soi-même via
+- **Allergies des autres membres de la famille invisibles dans `FamilyView` pour un
+  compte réel** (repéré en creusant une demande de contrôle ingrédients×allergies sur
+  la carte de repas du planning) — `FamilyView` (`src/components/family.tsx`,
+  ~L.219-239) lit les allergies d'un membre autre que soi-même via
   `localStorage.getItem("mealPlanner_registeredUsers")`, un reliquat de l'ancienne
   simulation multi-utilisateurs 100% locale d'avant la migration Supabase. Pour un
   compte réel cette clé n'est jamais peuplée : la branche ne retourne donc jamais rien
   pour un membre ≠ soi (`Aucune allergie renseignée` par défaut, même si le membre en a
-  déclaré). Ne fonctionne "par accident" que sur le compte démo, où
-  `registeredUsers`/`currentUser.allergies` restent cohérents. Cause racine :
-  `fetchUserPreferences` (`src/lib/dataLayer.ts`) ne lit que le profil de l'utilisateur
-  courant — RLS self-only sur `profiles`/`profile_food_restrictions`, aucune fonction
-  `SECURITY DEFINER` équivalente à `is_family_member` pour lire les allergies de toute
-  la famille. À corriger avant toute fonctionnalité qui croise repas/recette et
-  allergies des présents (ex. alerte allergène sur la carte de repas) : nécessite une
-  fonction RLS-safe côté DB pour la lecture cross-membre, la logique de croisement
-  ingrédients↔allergies elle-même pouvant rester purement front (display-only, même
-  esprit que la génération de la liste de courses).
+  déclaré). Ne fonctionne "par accident" que sur le compte démo. **Toujours pas
+  corrigé dans `FamilyView` lui-même** — mais le blocage RLS sous-jacent a depuis été
+  résolu (voir RPC `get_family_allergies` plus bas) : brancher `FamilyView` sur
+  `fetchFamilyAllergies` au lieu de la clé localStorage morte est maintenant trivial,
+  juste pas fait faute de demande explicite sur cet écran précis.
+- **`suggestForDates` (bouton « Suggérer », `src/components/calendar.tsx`) ignore
+  réellement les allergies/dislikes malgré son commentaire** — lit `m.allergies`/
+  `m.dislikes` directement sur les objets `familyMembers`, des champs qui n'ont jamais
+  été peuplés sur ces objets (ni pour un compte réel, ni en démo : la fonction de
+  mapping de `fetchFamiliesForUser` ne recopie que memberId/userId/userName/
+  userEmail/avatarEmoji/appetite/role). Les deux `Set` d'ingrédients à éviter sont donc
+  toujours vides et la suggestion aléatoire ne filtre jamais rien en pratique. Même
+  famille de bug que le point précédent, pas corrigé ici (hors scope : la demande
+  portait sur l'affichage carte de repas, pas sur l'algorithme de suggestion) — à
+  reprendre avec `familyAllergies` (voir plus bas) le jour où quelqu'un veut que
+  « Suggérer » respecte vraiment les allergies ; le volet dislikes resterait lui à
+  faire (pas d'équivalent `get_family_dislikes` pour l'instant).
 
 ## Fonctionnalités ajoutées pendant la migration
 
@@ -321,8 +328,30 @@ plus simple et plus sûr à maintenir que des upserts fins.
   run dev` avec le compte démo, puis réduites via `sips`. Pas de pipeline automatisé :
   si l'UI change significativement, les captures sont à régénérer à la main de la même
   façon.
-
-## Outillage — hooks Claude Code
+- **Contrôle ingrédients×allergies sur la carte de repas du planning** — un petit
+  triangle d'alerte (`AllergyWarningBadge`, icône `alert-triangle`, détail au survol
+  via `title` natif) apparaît sur une carte de repas dès qu'un présent a déclaré une
+  allergie correspondant à un ingrédient d'une des recettes assignées. Scope
+  volontairement restreint à la demande initiale : allergies uniquement (pas les
+  aliments non appréciés), et affichage uniquement dans le planning (Jour/Semaine/Perso
+  — pas dans les pastilles compactes de la vue Mois, ni ailleurs dans l'app pour
+  l'instant).
+  - **DB** : fonction `get_family_allergies(p_family_id)` — `SECURITY DEFINER`, même
+    schéma que `is_family_member` (contourne le self-only RLS de
+    `profile_food_restrictions`, filtre `restriction_type = 'allergy'`). `EXECUTE`
+    explicitement restreint à `authenticated` (revoke `public`/`anon` — repéré via
+    l'advisor de sécurité juste après la création : `CREATE FUNCTION` accorde `EXECUTE`
+    à `PUBLIC` par défaut si on ne le révoque pas, contrairement aux autres fonctions
+    `SECURITY DEFINER` du projet qui ne l'accordent pas à `anon`). Suite `test:rls`
+    étendue à 17 checks (+3 : lecture par un membre, isolation cross-famille).
+  - **Front** : `fetchFamilyAllergies` (`src/lib/dataLayer.ts`) appelle le RPC et
+    retourne `{ [memberId]: [{type, id}] }` (même forme que `allergies`/`dislikes` de
+    `fetchUserPreferences`). Chargé dans `App.tsx` par effet pour un compte réel (comme
+    repas/courses/modèles), calculé par `useMemo` pour le compte démo (famille à un
+    seul membre : reprend directement `currentUser.allergies`). `getMealAllergyConflicts`
+    (pure, dans `calendar.tsx`) recoupe `meal.recipeIds` × `meal.attendeeIds` ×
+    `familyAllergies` × le catalogue `ingredients`, réutilisé dans les 3 rendus de carte
+    (`DayPanel`, vue Semaine, vue Perso).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

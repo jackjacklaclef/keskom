@@ -7,6 +7,55 @@ import { todayStr, getMondayOf } from "../lib/dateUtils";
 import { Icon, Modal, ModalHeader, Field } from "./ui";
 import { RecipeSelectionModal } from "./recipeSelection";
 
+// Conflits allergène pour un repas : recoupe les ingrédients des recettes assignées
+// avec les allergies des présents (familyAllergies: { [memberId]: [{type, id}] }).
+const getMealAllergyConflicts = (meal, recipes, ingredients, familyAllergies, familyMembers) => {
+  if (!meal || meal.status !== "normal") return [];
+  const recipeIds = meal.recipeIds || [];
+  const attendeeIds = meal.attendeeIds || [];
+  if (recipeIds.length === 0 || attendeeIds.length === 0) return [];
+  const conflicts = [];
+  attendeeIds.forEach((memberId) => {
+    const allergies = familyAllergies?.[memberId];
+    if (!allergies || allergies.length === 0) return;
+    const member = familyMembers.find((m) => m.memberId === memberId);
+    recipeIds.forEach((recipeId) => {
+      const recipe = recipes.find((r) => r.id === recipeId);
+      if (!recipe) return;
+      (recipe.ingredients || []).forEach((ri) => {
+        const ing = ingredients.find((i) => i.id === ri.ingredientId);
+        const hit = allergies.find((a) =>
+          (a.type === "ingredient" && a.id === ri.ingredientId) ||
+          (a.type === "category" && ing && a.id === ing.category)
+        );
+        if (hit) {
+          conflicts.push({
+            memberName: member?.userName || "Un convive",
+            recipeName: recipe.name,
+            ingredientName: ing?.name || ri.ingredientName,
+          });
+        }
+      });
+    });
+  });
+  return conflicts;
+};
+
+// Petit triangle d'alerte, visible sur la carte de repas si un présent est allergique
+// à un ingrédient d'une recette assignée. Détail au survol (title natif, pas de nouveau
+// composant tooltip pour rester simple).
+const AllergyWarningBadge = ({ conflicts }) => {
+  if (!conflicts || conflicts.length === 0) return null;
+  const title = conflicts
+    .map((c) => `${c.memberName} est allergique à ${c.ingredientName} (${c.recipeName})`)
+    .join("\n");
+  return (
+    <span title={title} style={{ display: "inline-flex", alignItems: "center", color: "var(--berry)", flexShrink: 0 }}>
+      <Icon name="alert-triangle" size={13} />
+    </span>
+  );
+};
+
 // Modale de confirmation pour vider une semaine
 export const ClearWeekModal = ({ dateStr, mealPlans, onClose, onClear }) => {
   const monday = getMondayOf(new Date(dateStr + "T12:00:00"));
@@ -200,6 +249,7 @@ export const DayPanel = ({
   date, dateStr, mealPlans, recipes, recentRecipeIds,
   weekTemplates, onAddMeal, onUpdateMeal, onClose,
   onDuplicateWeek, onApplyTemplate, showBreakfast = false, familyMembers = [], onSuggest,
+  ingredients = [], familyAllergies = {},
 }) => {
   const [editingSlot, setEditingSlot] = useState(null);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -329,7 +379,10 @@ export const DayPanel = ({
                   names.length === 0
                     ? <span className="mp-small mp-text-faint">+ Ajouter</span>
                     : <>
-                        <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4, paddingRight: "1.4rem" }}>{names.join(", ")}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                          <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4, paddingRight: "1.4rem" }}>{names.join(", ")}</span>
+                          <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
+                        </div>
                         <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
                       </>
                 )}
@@ -372,7 +425,7 @@ export const DayPanel = ({
   );
 };
 
-export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecipeIds = [], weekTemplates = [], onApplyTemplate, onDuplicateWeek, onClearWeek, onNavigate, familyMembers = [] }) => {
+export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, recentRecipeIds = [], weekTemplates = [], onApplyTemplate, onDuplicateWeek, onClearWeek, onNavigate, familyMembers = [], ingredients = [], familyAllergies = {} }) => {
   const [viewMode, setViewMode] = useState("week");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
@@ -760,7 +813,10 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, rece
                             names.length === 0
                               ? <span className="mp-small mp-text-faint">+ Ajouter</span>
                               : <>
-                                  <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                    <span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span>
+                                    <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
+                                  </div>
                                   <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
                                 </>
                           )}
@@ -937,7 +993,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, rece
                           style={{ width: "100%", boxSizing: "border-box", background: bgColor, border: `1px solid ${borderColor}`, borderRadius: radius.sm, padding: "0.55rem 0.65rem", cursor: isPast ? "default" : "pointer", textAlign: "left", fontFamily: "inherit", transition: "background 100ms, border-color 100ms", minHeight: "4rem", opacity: isPast ? 0.55 : 1 }}>
                           {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
-                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
+                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} /></div><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
                         </button>
                       );
                     })}
@@ -1067,6 +1123,8 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, rece
                       onApplyTemplate={onApplyTemplate}
                       showBreakfast={showBreakfast}
                       familyMembers={familyMembers}
+                      ingredients={ingredients}
+                      familyAllergies={familyAllergies}
                       onSuggest={(dateStr) => suggestForDates([dateStr])}
                     />
                   )}

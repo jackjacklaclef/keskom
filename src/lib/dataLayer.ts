@@ -76,6 +76,26 @@ export const fetchUserPreferences = async (profileId: string): Promise<{ diets: 
   return { diets, allergies, dislikes };
 };
 
+// Allergies de tous les membres d'une famille (pour le contrôle ingrédients×allergies
+// sur la carte de repas). RLS sur profile_food_restrictions est self-only : passe par
+// le RPC SECURITY DEFINER get_family_allergies plutôt qu'une requête directe.
+// Retourne { [memberId]: [{type, id}, ...] } — même forme que allergies/dislikes ci-dessus.
+export const fetchFamilyAllergies = async (familyId: string): Promise<Record<string, any[]>> => {
+  const sb = await getSupabase();
+  if (!sb) return {};
+  const { data, error } = await sb.rpc("get_family_allergies", { p_family_id: familyId });
+  if (error || !data) return {};
+  const byMember: Record<string, any[]> = {};
+  data.forEach((r: any) => {
+    const item = r.item_type === "ingredient"
+      ? { type: "ingredient", id: String(r.ingredient_id) }
+      : { type: "category", id: r.category_short_name };
+    if (!item.id) return;
+    (byMember[r.member_id] ||= []).push(item);
+  });
+  return byMember;
+};
+
 // Remplace entièrement les allergies OU les aliments non appréciés d'un profil.
 export const saveFoodRestrictions = async (sb: any, profileId: string, restrictionType: "allergy" | "dislike", items: any[]) => {
   await sb.from("profile_food_restrictions").delete().eq("profile_id", profileId).eq("restriction_type", restrictionType);
