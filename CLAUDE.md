@@ -1,27 +1,30 @@
 # Keskom — historique de projet
 
-Application de planification de repas familiale (React + Vite, tout dans `src/App.tsx`),
-backend Supabase (projet `wdctmgcfinspgwvkwaii`). Ce fichier retrace les décisions et
-l'état du projet accumulés au fil des sessions Claude, pour éviter de re-découvrir les
-mêmes pièges.
+Application de planification de repas familiale (React + Vite, front-end découpé en
+modules sous `src/` — voir Architecture générale), backend Supabase (projet
+`wdctmgcfinspgwvkwaii`). Ce fichier retrace les décisions et l'état du projet
+accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes pièges.
 
 ## Architecture générale
 
-- Le front-end est en cours de découpage depuis un unique fichier `src/App.tsx`
-  (~8200 lignes à l'origine) vers plusieurs modules — plan complet dans
-  `/Users/jacquesmolette/.claude/plans/giggly-inventing-frog.md` (9 étapes, une par
-  tour de conversation, chacune commitée séparément, refactor pur — zéro logique
-  modifiée, vérifié à chaque étape par `npm run build` + `npm run typecheck` à parité
-  + `npm run test:rls` pour les étapes touchant la couche data/auth). **État : étapes
-  1-7/9 terminées**, ~2500 lignes restantes dans `App.tsx` (calendrier + composant
-  `App` racine). Table de correspondance :
+- Le front-end, initialement un unique fichier `src/App.tsx` (~8200 lignes), a été
+  découpé en modules sur 9 étapes (une par tour de conversation, chacune commitée
+  séparément) — plan dans `/Users/jacquesmolette/.claude/plans/giggly-inventing-frog.md`.
+  **Terminé.** Refactor pur à chaque étape : zéro logique modifiée, vérifié par
+  `npm run build` + `npm run typecheck` (parité stricte : mêmes 1863 erreurs
+  pré-existantes tout du long, jamais de régression) + `npm run test:rls` pour les
+  étapes touchant la couche data/auth. `App.tsx` fait maintenant 1137 lignes : plus
+  qu'un seul composant top-level, `App`, qui porte le state racine, ses ~62 handlers,
+  les effets (dont les abonnements Realtime) et le routing entre vues. Table de
+  correspondance :
 
   | Contenu | Destination |
   |---|---|
   | `colors`/`dark`/`space`/`radius`/`GlobalStyle` | `src/theme.tsx` |
   | Toutes les constantes (`MEAL_TYPES`, `RECIPE_CATEGORIES`, `DIET_OPTIONS`, `AVATAR_EMOJI_GROUPS`, `APPETITE_LEVELS`, `STORAGE_KEYS`, `ingredientCategories`, etc.) | `src/constants.ts` |
-  | Primitives UI génériques (`Icon`, `Modal`, `ModalHeader`, `Field`, `Toast`, `TagInput`, `NavButton`, `LogoMark`, `Stepper`, `AuthLogo`, `PasswordInput`...) | `src/components/ui.tsx` (un seul fichier, volontairement, pour limiter les allers-retours d'imports) |
   | `AppUser`/`AuthResult`/`AuthChangeCallback` | `src/types.ts` |
+  | Primitives UI génériques (`Icon`, `Modal`, `ModalHeader`, `Field`, `Toast`, `TagInput`, `NavButton`, `LogoMark`, `Stepper`, `AuthLogo`, `PasswordInput`...) | `src/components/ui.tsx` (un seul fichier, volontairement, pour limiter les allers-retours d'imports) |
+  | `Sidebar`/`MobileDrawer`/`FamilySelector` | `src/components/layout.tsx` |
   | `getSupabase()` | `src/lib/supabaseClient.ts` (**n'est plus le fichier mort** — voir bug historique plus bas) |
   | `loadFromStorage`/`saveToStorage`/constantes démo/jeu de données mock | `src/lib/storage.ts` |
   | `AuthService` | `src/lib/authService.ts` |
@@ -29,24 +32,26 @@ mêmes pièges.
   | `todayStr`/`getMondayOf`/`dateOfSlot` | `src/lib/dateUtils.ts` |
   | `FamilySetupView`/`LoginView`/`RegisterView`/`ForgotPasswordView` | `src/components/auth.tsx` |
   | `PrivacyModal`/`PrivacyView`/`PrivacyLink` | `src/components/privacy.tsx` |
-  | `AccountView`/`UserAvatar`/`EmojiAvatarPicker`/`NotificationsView`/`PreferencesView`/allergies-picker | `src/components/account.tsx` |
+  | `AccountView`/`UserAvatar`/`EmojiAvatarPicker`/`NotificationsView`/`PreferencesView`/allergies-picker/`MemberModal` (mort) | `src/components/account.tsx` |
   | `FamilyView` | `src/components/family.tsx` |
   | `ShoppingListView` et sous-composants | `src/components/shopping.tsx` |
   | `TemplateGrid`/`WeekTemplateEditor`/`ApplyTemplateModal` | `src/components/templates.tsx` |
   | `RecipeSelectionModal` | `src/components/recipeSelection.tsx` |
   | `RecipeModal`/`RecipeDetailModal`/`CookModeModal`/`StepTimer`/`RecipesView` | `src/components/recipes.tsx` |
+  | `ClearWeekModal`/`ApplyTemplateModeModal`/`DuplicateWeekModal`/`AttendeeAvatarStack`/`DayPanel`/`CalendarView`/`QuickPlanModal` | `src/components/calendar.tsx` |
 
-  Plusieurs fichiers ont été tirés **en avance** sur leur étape prévue pour casser des
-  dépendances circulaires ou débloquer une chaîne (même principe à chaque fois) :
-  `privacy.tsx` (étape 4, car `RegisterView` et `AccountView` en dépendent tous les
-  deux et ne peuvent pas s'importer mutuellement) et `dateUtils.ts`/
-  `recipeSelection.tsx` (étape 6, car `WeekTemplateEditor` a besoin de
-  `RecipeSelectionModal`). Effet en cascade bénéfique : `PreferencesView`, laissée de
-  côté à l'étape 5 pour cette même raison, a pu être intégrée dès l'étape 6 une fois
-  la chaîne débloquée — elle vit donc dans `account.tsx`, pas dans une étape séparée.
-  `MemberModal` (dans `account.tsx`) est mort depuis avant cette session (jamais
-  rendu nulle part) ; conservé tel quel, pas supprimé, pour ne rien changer au
-  comportement pendant le refactor.
+  Deux écarts par rapport au plan initial, tous deux volontaires : (1) plusieurs
+  fichiers ont été tirés **en avance** sur leur étape prévue pour casser une
+  dépendance circulaire ou débloquer une chaîne — `privacy.tsx` (étape 4, car
+  `RegisterView` et `AccountView` en dépendent tous les deux et ne peuvent pas
+  s'importer mutuellement) et `dateUtils.ts`/`recipeSelection.tsx` (étape 6, car
+  `WeekTemplateEditor` a besoin de `RecipeSelectionModal`) ; effet en cascade
+  bénéfique, `PreferencesView` (bloquée par cette même chaîne) a pu être intégrée dès
+  l'étape 6 plutôt qu'attendre. (2) `layout.tsx` figurait dans l'arborescence cible du
+  plan mais n'était assigné à aucune étape numérotée précise — extrait en clôture du
+  chantier (étape 9) une fois le reste stabilisé. `MemberModal` est mort depuis avant
+  cette session (jamais rendu nulle part) ; conservé tel quel, pas supprimé, pour ne
+  rien changer au comportement pendant le refactor.
 - Client Supabase : **`src/lib/supabaseClient.ts` est désormais le vrai fichier utilisé**
   (`getSupabase()`, cache la *promesse* elle-même — voir bugs ci-dessous). Il
   remplace l'ancien fichier mort du même nom qui installait le package npm
