@@ -234,6 +234,24 @@ plus simple et plus sûr à maintenir que des upserts fins.
   volontairement pour garder le refactor à logique strictement inchangée — à corriger
   dans une session dédiée (ajouter `const [error, setError] = useState("")` et
   afficher le message, sur le modèle des autres écrans d'auth).
+- **Allergies des autres membres de la famille invisibles pour un compte réel**
+  (repéré en creusant une demande de contrôle ingrédients×allergies sur la carte de
+  repas du planning) — `FamilyView` (`src/components/family.tsx`, ~L.219-239) lit les
+  allergies d'un membre autre que soi-même via
+  `localStorage.getItem("mealPlanner_registeredUsers")`, un reliquat de l'ancienne
+  simulation multi-utilisateurs 100% locale d'avant la migration Supabase. Pour un
+  compte réel cette clé n'est jamais peuplée : la branche ne retourne donc jamais rien
+  pour un membre ≠ soi (`Aucune allergie renseignée` par défaut, même si le membre en a
+  déclaré). Ne fonctionne "par accident" que sur le compte démo, où
+  `registeredUsers`/`currentUser.allergies` restent cohérents. Cause racine :
+  `fetchUserPreferences` (`src/lib/dataLayer.ts`) ne lit que le profil de l'utilisateur
+  courant — RLS self-only sur `profiles`/`profile_food_restrictions`, aucune fonction
+  `SECURITY DEFINER` équivalente à `is_family_member` pour lire les allergies de toute
+  la famille. À corriger avant toute fonctionnalité qui croise repas/recette et
+  allergies des présents (ex. alerte allergène sur la carte de repas) : nécessite une
+  fonction RLS-safe côté DB pour la lecture cross-membre, la logique de croisement
+  ingrédients↔allergies elle-même pouvant rester purement front (display-only, même
+  esprit que la génération de la liste de courses).
 
 ## Fonctionnalités ajoutées pendant la migration
 
