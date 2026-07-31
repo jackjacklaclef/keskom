@@ -10,7 +10,7 @@ mêmes pièges.
 - Le front-end est en cours de découpage depuis un unique fichier `src/App.tsx`
   (~8200 lignes à l'origine) vers plusieurs modules — voir le plan complet dans
   `/Users/jacquesmolette/.claude/plans/giggly-inventing-frog.md` (9 étapes, une par
-  tour de conversation, chacune commitée séparément). État actuel : **étapes 1-3/9
+  tour de conversation, chacune commitée séparément). État actuel : **étapes 1-4/9
   terminées** — `colors`/`dark`/`space`/`radius`/`GlobalStyle` → `src/theme.tsx` ;
   `MEAL_TYPES`/`NAV_ITEMS`/`RECIPE_CATEGORIES`/`QUANTITY_UNITS`/`DIET_OPTIONS`/
   `AVATAR_EMOJI_GROUPS`/`APPETITE_LEVELS`/`DAYS_OF_WEEK`/`MONTHS`/`PRIVACY_CONTENT`/
@@ -24,12 +24,18 @@ mêmes pièges.
   (voir point suivant — **ce fichier n'est plus mort**) ; `loadFromStorage`/
   `saveToStorage`/constantes démo/jeu de données mock → `src/lib/storage.ts` ;
   `AuthService` → `src/lib/authService.ts` ; les 14 fonctions `fetch*`/`save*`
-  Supabase → `src/lib/dataLayer.ts`. `App.tsx` fait encore ~4700 lignes (vues métier
-  et le composant `App` racine : state, handlers, routing) — la suite reste à
-  extraire dans les prochaines étapes. Refactor pur : aucune logique modifiée à
-  chaque étape, vérifié par `npm run build` + `npm run typecheck` (à parité avec
-  l'état d'avant, aux erreurs près qui se redistribuent entre fichiers sans changer
-  de nature) + `npm run test:rls` pour l'étape touchant la couche data.
+  Supabase → `src/lib/dataLayer.ts` ; `FamilySetupView`/`LoginView`/`RegisterView`/
+  `ForgotPasswordView` → `src/components/auth.tsx` ; `PrivacyModal`/`PrivacyView`/
+  `PrivacyLink` → `src/components/privacy.tsx` (extrait en avance sur l'étape 5 —
+  `RegisterView` et `AccountView` en dépendent tous les deux, et ces deux vues ne
+  peuvent pas s'importer l'une l'autre : un fichier séparé était nécessaire pour
+  éviter l'import circulaire, pas une simple option de style). `App.tsx` fait encore
+  ~4300 lignes (vues métier restantes et le composant `App` racine : state, handlers,
+  routing) — la suite reste à extraire dans les prochaines étapes. Refactor pur :
+  aucune logique modifiée à chaque étape, vérifié par `npm run build` + `npm run
+  typecheck` (à parité avec l'état d'avant, aux erreurs près qui se redistribuent
+  entre fichiers sans changer de nature) + `npm run test:rls` pour les étapes
+  touchant la couche data/auth.
 - Client Supabase : **`src/lib/supabaseClient.ts` est désormais le vrai fichier utilisé**
   (`getSupabase()`, cache la *promesse* elle-même — voir bugs ci-dessous). Il
   remplace l'ancien fichier mort du même nom qui installait le package npm
@@ -141,6 +147,17 @@ plus simple et plus sûr à maintenir que des upserts fins.
     list), repérée par l'advisor de sécurité Supabase. Un bucket `public=true` sert déjà
     les objets par URL directe sans RLS ; la policy ne servait donc qu'à exposer le
     listing, jamais utilisé côté app. Supprimée.
+
+## Bugs connus, non corrigés
+
+- **`ForgotPasswordView` — `ReferenceError` si `resetPassword` échoue** (repéré lors du
+  découpage de `App.tsx`, étape 4, dans `src/components/auth.tsx`) — la fonction
+  appelle `setError(error)` mais aucun état `error` n'est déclaré dans ce composant
+  (seuls `email`/`sent`/`loading` le sont). Confirmé pré-existant (même erreur
+  TypeScript `TS2304` avant l'extraction, à l'ancien emplacement). Pas corrigé
+  volontairement pour garder le refactor à logique strictement inchangée — à corriger
+  dans une session dédiée (ajouter `const [error, setError] = useState("")` et
+  afficher le message, sur le modèle des autres écrans d'auth).
 
 ## Fonctionnalités ajoutées pendant la migration
 
