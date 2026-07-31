@@ -352,6 +352,30 @@ plus simple et plus sûr à maintenir que des upserts fins.
     (pure, dans `calendar.tsx`) recoupe `meal.recipeIds` × `meal.attendeeIds` ×
     `familyAllergies` × le catalogue `ingredients`, réutilisé dans les 3 rendus de carte
     (`DayPanel`, vue Semaine, vue Perso).
+- **Drag and drop d'un créneau vers un autre (vues Semaine et Perso)** — glisser une
+  case de repas non vide vers une autre case (n'importe quel jour × type de repas)
+  déplace son contenu ; si la case de destination n'est pas vide, échange les deux
+  contenus plutôt que d'écraser. DnD HTML5 natif (`draggable`, `onDragStart`/
+  `onDragOver`/`onDrop`), pas de librairie ajoutée. Seules les cases non vides sont
+  `draggable` ; n'importe quelle case (vide ou non) est une cible de drop valide ; les
+  jours passés de la vue Perso restent non-draggable/non-droppable, cohérent avec leur
+  traitement lecture-seule existant. Vue Mois non concernée (un seul jour visible à la
+  fois dans `DayPanel`, pas de destination inter-jour pertinente).
+  - **Handler** : `handleMoveMeal(sourceDateStr, sourceType, destDateStr, destType)`
+    dans `App.tsx`, à côté de `handleAddMeal`/`handleUpdateMeal`, branché sur
+    `viewProps.calendar.onMoveMeal`. Lit le contenu des deux créneaux, écrit celui de la
+    source dans la destination puis l'ancien contenu de la destination dans la source
+    (échange si la destination avait du contenu, sinon la source se retrouve simplement
+    vidée). Suit le même pattern demo/réel que les handlers voisins : `isDemo` → mise à
+    jour synchrone du state local ; compte réel → deux `upsertMealSlot` séquentiels
+    (jamais en parallèle, pour éviter une course entre les deux refetch complets qui
+    suivent chaque écriture) puis un seul refetch final — même idiome que
+    `handleApplyTemplate`/`handleDuplicateWeek`.
+  - **Front** : logique dans `src/components/calendar.tsx` (Week + Custom views,
+    structure de grille identique). Vérifié en conditions réelles (compte démo, via un
+    script Puppeteer jetable hors repo — même méthode que pour les captures
+    d'onboarding) : échange de deux créneaux remplis, puis déplacement d'un créneau
+    rempli vers un créneau vide.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
