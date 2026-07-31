@@ -10,8 +10,8 @@ mêmes pièges.
 - Le front-end est en cours de découpage depuis un unique fichier `src/App.tsx`
   (~8200 lignes à l'origine) vers plusieurs modules — voir le plan complet dans
   `/Users/jacquesmolette/.claude/plans/giggly-inventing-frog.md` (9 étapes, une par
-  tour de conversation, chacune commitée séparément). État actuel : **étapes 1-5/9
-  terminées** (étape 5 partielle, voir plus bas) — `colors`/`dark`/`space`/`radius`/
+  tour de conversation, chacune commitée séparément). État actuel : **étapes 1-6/9
+  terminées** — `colors`/`dark`/`space`/`radius`/
   `GlobalStyle` → `src/theme.tsx` ;
   `MEAL_TYPES`/`NAV_ITEMS`/`RECIPE_CATEGORIES`/`QUANTITY_UNITS`/`DIET_OPTIONS`/
   `AVATAR_EMOJI_GROUPS`/`APPETITE_LEVELS`/`DAYS_OF_WEEK`/`MONTHS`/`PRIVACY_CONTENT`/
@@ -33,21 +33,24 @@ mêmes pièges.
   éviter l'import circulaire, pas une simple option de style) ; `AccountView`/
   `UserAvatar`/`EmojiAvatarPicker`/`NotificationToggle`/`NotificationsView`/
   `MemberModal` (mort)/`resolveAllergy`/`IngredientRestrictionBadge`/`AllergyBadge`/
-  `IngredientRestrictionPicker`/`AllergyPicker` → `src/components/account.tsx` ;
-  `FamilyView` → `src/components/family.tsx`. **Étape 5 volontairement incomplète** :
-  `PreferencesView` reste dans `App.tsx` — elle dépend de `WeekTemplateEditor`/
-  `TemplateGrid`/`ApplyTemplateModal` (prévus étape 6), qui dépendent eux-mêmes de
-  `RecipeSelectionModal` (prévu étape 8, calendrier). L'extraire aurait forcé à tirer
-  toute la chaîne calendrier en avance dans le même tour ; reportée à une étape
-  ultérieure une fois `RecipeSelectionModal` disponible quelque part d'importable
-  (l'étape 6 devra probablement tirer `RecipeSelectionModal` en avance, sur le même
-  principe que `privacy.tsx`). `App.tsx` fait encore ~4200 lignes (vues métier
-  restantes, dont `PreferencesView`, et le composant `App` racine : state, handlers,
-  routing) — la suite reste à extraire dans les prochaines étapes. Refactor pur :
-  aucune logique modifiée à chaque étape, vérifié par `npm run build` + `npm run
-  typecheck` (à parité avec l'état d'avant, aux erreurs près qui se redistribuent
-  entre fichiers sans changer de nature) + `npm run test:rls` pour les étapes
-  touchant la couche data/auth.
+  `IngredientRestrictionPicker`/`AllergyPicker`/`PreferencesView` →
+  `src/components/account.tsx` ; `FamilyView` → `src/components/family.tsx` ;
+  `guessItemCategory`/`groupByCategory`/`ShoppingItemRow`/`CategorySection`/
+  `DateRangeBar`/`ShoppingListView`/`AddShoppingItemModal`/`ExportListModal` →
+  `src/components/shopping.tsx` ; `TemplateGrid`/`WeekTemplateEditor`/
+  `ApplyTemplateModal` → `src/components/templates.tsx` ; `todayStr`/`getMondayOf`/
+  `dateOfSlot` → `src/lib/dateUtils.ts` ; `RecipeSelectionModal` →
+  `src/components/recipeSelection.tsx`. Ces deux derniers ont été tirés en avance sur
+  l'étape 8 (calendrier), sur le même principe que `privacy.tsx` — `WeekTemplateEditor`
+  en avait besoin. Ça a eu un effet en cascade bénéfique : `PreferencesView`, laissée
+  de côté à l'étape 5 car elle dépendait de cette même chaîne, a pu être intégrée dans
+  la foulée à l'étape 6 (elle est donc dans `account.tsx`, pas dans une étape à part).
+  `App.tsx` fait encore ~3400 lignes (calendrier, recettes, et le composant `App`
+  racine : state, handlers, routing) — la suite reste à extraire dans les prochaines
+  étapes. Refactor pur : aucune logique modifiée à chaque étape, vérifié par `npm run
+  build` + `npm run typecheck` (à parité avec l'état d'avant, aux erreurs près qui se
+  redistribuent entre fichiers sans changer de nature) + `npm run test:rls` pour les
+  étapes touchant la couche data/auth.
 - Client Supabase : **`src/lib/supabaseClient.ts` est désormais le vrai fichier utilisé**
   (`getSupabase()`, cache la *promesse* elle-même — voir bugs ci-dessous). Il
   remplace l'ancien fichier mort du même nom qui installait le package npm
