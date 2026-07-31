@@ -210,6 +210,16 @@ plus simple et plus sûr à maintenir que des upserts fins.
     list), repérée par l'advisor de sécurité Supabase. Un bucket `public=true` sert déjà
     les objets par URL directe sans RLS ; la policy ne servait donc qu'à exposer le
     listing, jamais utilisé côté app. Supprimée.
+11. **Boutons Restaurant / Pas de repas inopérants dans l'éditeur de modèle** —
+    `WeekTemplateEditor` (`src/components/templates.tsx`) n'appelait `RecipeSelectionModal`
+    qu'avec `onSave`, jamais `onSaveStatus` (requis dès que le statut choisi n'est pas
+    `"normal"`, voir `handleSave` dans `recipeSelection.tsx`) : cliquer Restaurant/Pas de
+    repas puis Valider appelait une prop `undefined`, sans effet. Les slots de modèle
+    n'avaient d'ailleurs aucune place pour un statut (`{day, type, recipeIds}` seulement).
+    Corrigé : slots étendus à `{day, type, recipeIds, status}`, `onSaveStatus` câblé,
+    `TemplateGrid` et l'aperçu de `ApplyTemplateModal` affichent le statut, et
+    `handleApplyTemplate` propage `slot.status` (au lieu de `"normal"` en dur) lors de
+    l'application à une semaine réelle.
 
 ## Bugs connus, non corrigés
 
