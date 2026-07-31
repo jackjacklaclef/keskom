@@ -46,37 +46,36 @@ export const TemplateGrid = ({ slots, recipes, onCellClick, readOnly }) => (
 
           {/* Cellules */}
           {DAYS_OF_WEEK.map((_, dayIdx) => {
-            const slotRecipeIds = slots
-              .filter((s) => s.day === dayIdx && s.type === type.id)
-              .flatMap((s) => s.recipeIds);
+            const slot = slots.find((s) => s.day === dayIdx && s.type === type.id);
+            const slotRecipeIds = slot?.recipeIds || [];
+            const status = slot?.status || "normal";
             const names = slotRecipeIds
               .map((id) => recipes.find((r) => r.id === id)?.name)
               .filter(Boolean);
-            const filled = names.length > 0;
-            const label = filled
-              ? (names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`)
-              : null;
+            const filled = names.length > 0 || status !== "normal";
+            const label = status === "restaurant"
+              ? "Restaurant"
+              : status === "skip"
+              ? "Pas de repas"
+              : (names.length > 0 ? (names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`) : null);
+            const specialColor = status === "restaurant" ? "amber" : status === "skip" ? "neutral" : null;
+            const washColor = specialColor === "amber" ? "var(--amber-wash)" : specialColor === "neutral" ? "var(--paper-sunken)" : (type.color === "amber" ? "var(--amber-wash)" : type.color === "clay" ? "var(--clay-wash)" : "var(--sage-wash)");
+            const textColor = specialColor === "amber" ? "var(--amber)" : specialColor === "neutral" ? "var(--ink-soft)" : (type.color === "amber" ? "var(--amber)" : type.color === "clay" ? "var(--clay)" : "var(--sage)");
 
             return (
               <button
                 key={dayIdx}
                 type="button"
-                onClick={() => !readOnly && onCellClick && onCellClick(dayIdx, type.id, slotRecipeIds)}
+                onClick={() => !readOnly && onCellClick && onCellClick(dayIdx, type.id, slotRecipeIds, status)}
                 style={{
                   padding: "0.25rem 0.3rem",
                   borderRadius: radius.sm,
-                  border: filled
-                    ? `1px solid ${type.color === "amber" ? "var(--amber-wash)" : type.color === "clay" ? "var(--clay-wash)" : "var(--sage-wash)"}`
-                    : "1px dashed var(--line)",
-                  background: filled
-                    ? (type.color === "amber" ? "var(--amber-wash)" : type.color === "clay" ? "var(--clay-wash)" : "var(--sage-wash)")
-                    : "transparent",
+                  border: filled ? `1px solid ${washColor}` : "1px dashed var(--line)",
+                  background: filled ? washColor : "transparent",
                   cursor: readOnly ? "default" : "pointer",
                   fontSize: "0.6rem",
                   lineHeight: 1.3,
-                  color: filled
-                    ? (type.color === "amber" ? "var(--amber)" : type.color === "clay" ? "var(--clay)" : "var(--sage)")
-                    : "var(--ink-faint)",
+                  color: filled ? textColor : "var(--ink-faint)",
                   textAlign: "center",
                   fontFamily: "inherit",
                   fontWeight: 500,
@@ -106,17 +105,17 @@ export const WeekTemplateEditor = ({ template, recipes, recentRecipeIds, activeF
   const [slots, setSlots] = useState(template?.slots || []);
   const [editingCell, setEditingCell] = useState(null); // { day, type, recipeIds }
 
-  const handleCellClick = (day, type, currentIds) => {
-    setEditingCell({ day, type, recipeIds: currentIds });
+  const handleCellClick = (day, type, currentIds, currentStatus) => {
+    setEditingCell({ day, type, recipeIds: currentIds, status: currentStatus || "normal" });
   };
 
-  const handleCellSave = (recipeIds) => {
+  const handleCellSave = (recipeIds, status = "normal") => {
     if (!editingCell) return;
     setSlots((prev) => {
       // Retirer les slots existants pour ce créneau, puis ajouter le nouveau
       const filtered = prev.filter((s) => !(s.day === editingCell.day && s.type === editingCell.type));
-      if (recipeIds.length > 0) {
-        return [...filtered, { day: editingCell.day, type: editingCell.type, recipeIds }];
+      if (status !== "normal" || recipeIds.length > 0) {
+        return [...filtered, { day: editingCell.day, type: editingCell.type, recipeIds, status }];
       }
       return filtered;
     });
@@ -167,12 +166,13 @@ export const WeekTemplateEditor = ({ template, recipes, recentRecipeIds, activeF
       {editingCell && (
         <RecipeSelectionModal
           recipes={recipes}
-          meal={{ recipeIds: editingCell.recipeIds }}
+          meal={{ recipeIds: editingCell.recipeIds, status: editingCell.status }}
           mealType={editingCell.type}
           date={`${DAYS_OF_WEEK[editingCell.day]}`}
           recentRecipeIds={recentRecipeIds}
           onClose={() => setEditingCell(null)}
-          onSave={handleCellSave}
+          onSave={(recipeIds) => handleCellSave(recipeIds, "normal")}
+          onSaveStatus={(status, recipeIds) => handleCellSave(recipeIds, status)}
         />
       )}
     </div>
@@ -191,7 +191,7 @@ export const ApplyTemplateModal = ({ template, recipes, mealPlans, onClose, onAp
       const date = dateOfSlot(mon, slot.day);
       const names = slot.recipeIds.map((id) => recipes.find((r) => r.id === id)?.name).filter(Boolean);
       const type = MEAL_TYPES.find((t) => t.id === slot.type);
-      return { date, type, names, day: DAYS_OF_WEEK[slot.day] };
+      return { date, type, names, status: slot.status || "normal", day: DAYS_OF_WEEK[slot.day] };
     });
   }, [template, weekStart, recipes]);
 
@@ -247,7 +247,9 @@ export const ApplyTemplateModal = ({ template, recipes, mealPlans, onClose, onAp
               <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <span className={`mp-badge mp-badge-${p.type?.color || "neutral"}`}>{p.day}</span>
                 <span className="mp-small mp-text-soft">{p.type?.label}</span>
-                <span className="mp-small" style={{ flex: 1 }}>{p.names.join(", ") || <em>—</em>}</span>
+                <span className="mp-small" style={{ flex: 1 }}>
+                  {p.status === "restaurant" ? "Restaurant" : p.status === "skip" ? "Pas de repas" : (p.names.join(", ") || <em>—</em>)}
+                </span>
                 <span className="mp-micro mp-text-faint">{p.date}</span>
               </div>
             ))

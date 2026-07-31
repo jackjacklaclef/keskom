@@ -938,7 +938,7 @@ const App = () => {
           const affected = new Set(template.slots.map((s) => dateOfSlot(monday, s.day)));
           base = prev.filter((mp) => !affected.has(mp.date) || !template.slots.some((s) => s.type === mp.type && dateOfSlot(monday, s.day) === mp.date));
         }
-        const additions = slotsToApply.map((slot) => ({ id: `tpl-${Date.now()}-${slot.day}-${slot.type}`, date: dateOfSlot(monday, slot.day), type: slot.type, recipeIds: slot.recipeIds, familyId: activeFamily?.id }));
+        const additions = slotsToApply.map((slot) => ({ id: `tpl-${Date.now()}-${slot.day}-${slot.type}`, date: dateOfSlot(monday, slot.day), type: slot.type, recipeIds: slot.recipeIds, status: slot.status || "normal", familyId: activeFamily?.id }));
         return [...base, ...additions];
       });
       showToast(`${slotsToApply.length} créneau${slotsToApply.length>1?"x":""} appliqué${slotsToApply.length>1?"s":""}`, "sage");
@@ -948,7 +948,7 @@ const App = () => {
     try {
       const sb = await getSupabase();
       for (const slot of slotsToApply) {
-        await upsertMealSlot(sb, activeFamily.id, currentUser.id, dateOfSlot(monday, slot.day), slot.type, slot.recipeIds, "normal");
+        await upsertMealSlot(sb, activeFamily.id, currentUser.id, dateOfSlot(monday, slot.day), slot.type, slot.recipeIds, slot.status || "normal");
       }
       setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
       showToast(`${slotsToApply.length} créneau${slotsToApply.length>1?"x":""} appliqué${slotsToApply.length>1?"s":""}`, "sage");
