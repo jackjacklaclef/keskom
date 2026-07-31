@@ -15,8 +15,39 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
   pré-existantes tout du long, jamais de régression) + `npm run test:rls` pour les
   étapes touchant la couche data/auth. `App.tsx` fait maintenant 1137 lignes : plus
   qu'un seul composant top-level, `App`, qui porte le state racine, ses ~62 handlers,
-  les effets (dont les abonnements Realtime) et le routing entre vues. Table de
-  correspondance :
+  les effets (dont les abonnements Realtime) et le routing entre vues.
+
+  Arborescence actuelle (lignes de code) :
+
+  ```
+  src/
+    App.tsx                    1137  composant App racine (state, handlers, routing)
+    main.tsx                      9  point d'entrée Vite
+    theme.tsx                   641  design tokens + GlobalStyle
+    constants.ts                162  constantes métier (catégories, régimes, etc.)
+    types.ts                     22  AppUser, AuthResult, AuthChangeCallback
+    lib/
+      supabaseClient.ts          47  client Supabase (getSupabase())
+      authService.ts            272  AuthService
+      dataLayer.ts              345  fetch*/save* Supabase (14 fonctions)
+      storage.ts                656  localStorage + démo + jeu de données mock
+      dateUtils.ts               23  todayStr/getMondayOf/dateOfSlot
+    components/
+      ui.tsx                    405  primitives UI génériques
+      layout.tsx                216  Sidebar/MobileDrawer/FamilySelector
+      auth.tsx                  370  écrans de connexion/inscription
+      privacy.tsx                55  politique de confidentialité
+      account.tsx               790  compte, préférences, allergies
+      family.tsx                289  gestion de la famille
+      shopping.tsx              297  liste de courses
+      templates.tsx             271  semaines types
+      recipeSelection.tsx       188  sélecteur de recette pour un créneau
+      recipes.tsx               915  CRUD recettes, mode cuisine
+      calendar.tsx             1144  planning (jour/semaine/mois)
+  ```
+
+  Table de correspondance (contenu déplacé → fichier, avec le contexte de chaque
+  décision) :
 
   | Contenu | Destination |
   |---|---|
