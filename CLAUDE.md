@@ -10,8 +10,9 @@ mêmes pièges.
 - Le front-end est en cours de découpage depuis un unique fichier `src/App.tsx`
   (~8200 lignes à l'origine) vers plusieurs modules — voir le plan complet dans
   `/Users/jacquesmolette/.claude/plans/giggly-inventing-frog.md` (9 étapes, une par
-  tour de conversation, chacune commitée séparément). État actuel : **étapes 1-4/9
-  terminées** — `colors`/`dark`/`space`/`radius`/`GlobalStyle` → `src/theme.tsx` ;
+  tour de conversation, chacune commitée séparément). État actuel : **étapes 1-5/9
+  terminées** (étape 5 partielle, voir plus bas) — `colors`/`dark`/`space`/`radius`/
+  `GlobalStyle` → `src/theme.tsx` ;
   `MEAL_TYPES`/`NAV_ITEMS`/`RECIPE_CATEGORIES`/`QUANTITY_UNITS`/`DIET_OPTIONS`/
   `AVATAR_EMOJI_GROUPS`/`APPETITE_LEVELS`/`DAYS_OF_WEEK`/`MONTHS`/`PRIVACY_CONTENT`/
   `STORAGE_KEYS`/`NEW_MEMBER_SENTINEL`/`ingredientCategories` → `src/constants.ts` ;
@@ -29,8 +30,19 @@ mêmes pièges.
   `PrivacyLink` → `src/components/privacy.tsx` (extrait en avance sur l'étape 5 —
   `RegisterView` et `AccountView` en dépendent tous les deux, et ces deux vues ne
   peuvent pas s'importer l'une l'autre : un fichier séparé était nécessaire pour
-  éviter l'import circulaire, pas une simple option de style). `App.tsx` fait encore
-  ~4300 lignes (vues métier restantes et le composant `App` racine : state, handlers,
+  éviter l'import circulaire, pas une simple option de style) ; `AccountView`/
+  `UserAvatar`/`EmojiAvatarPicker`/`NotificationToggle`/`NotificationsView`/
+  `MemberModal` (mort)/`resolveAllergy`/`IngredientRestrictionBadge`/`AllergyBadge`/
+  `IngredientRestrictionPicker`/`AllergyPicker` → `src/components/account.tsx` ;
+  `FamilyView` → `src/components/family.tsx`. **Étape 5 volontairement incomplète** :
+  `PreferencesView` reste dans `App.tsx` — elle dépend de `WeekTemplateEditor`/
+  `TemplateGrid`/`ApplyTemplateModal` (prévus étape 6), qui dépendent eux-mêmes de
+  `RecipeSelectionModal` (prévu étape 8, calendrier). L'extraire aurait forcé à tirer
+  toute la chaîne calendrier en avance dans le même tour ; reportée à une étape
+  ultérieure une fois `RecipeSelectionModal` disponible quelque part d'importable
+  (l'étape 6 devra probablement tirer `RecipeSelectionModal` en avance, sur le même
+  principe que `privacy.tsx`). `App.tsx` fait encore ~4200 lignes (vues métier
+  restantes, dont `PreferencesView`, et le composant `App` racine : state, handlers,
   routing) — la suite reste à extraire dans les prochaines étapes. Refactor pur :
   aucune logique modifiée à chaque étape, vérifié par `npm run build` + `npm run
   typecheck` (à parité avec l'état d'avant, aux erreurs près qui se redistribuent
