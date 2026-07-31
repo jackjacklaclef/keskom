@@ -15,6 +15,7 @@ import { AccountView, NotificationsView } from "./components/account";
 import { FamilyView } from "./components/family";
 import { IngredientsView } from "./components/ingredients";
 import { TemplatesView } from "./components/templates";
+import { OnboardingTour } from "./components/onboarding";
 
 import { getSupabase } from "./lib/supabaseClient";
 import {
@@ -67,6 +68,7 @@ const App = () => {
   const [ingredients, setIngredients] = useState<any[]>(() => isDemo ? initialIngredients : []);
   const [weekTemplates, setWeekTemplates] = useState<any[]>(() => []);
   const [showFab, setShowFab] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Familles dont l'utilisateur est membre uniquement
   const userFamilies = useMemo(() =>
@@ -1069,7 +1071,7 @@ const App = () => {
     ingredients: { ingredients, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient },
     templates: { weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate },
     family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember, onSetMyAvatar: handleSetMyAvatar, onSetMemberAvatar: handleSetMemberAvatar, onSetMyAppetite: handleSetMyAppetite, onAssignMemberAppetite: handleAssignMemberAppetite },
-    account: { currentUser, activeFamily, ingredients, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateUserProfile: handleUpdateUserProfile, onSetMyAvatar: handleSetMyAvatar },
+    account: { currentUser, activeFamily, ingredients, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateUserProfile: handleUpdateUserProfile, onSetMyAvatar: handleSetMyAvatar, onReplayOnboarding: () => setShowOnboarding(true) },
   };
 
   const renderView = () => {
@@ -1094,6 +1096,22 @@ const App = () => {
   // (basé sur l'appartenance réelle via userFamilies, pas sur activeFamilyId qui peut être
   // absent/périmé même quand l'utilisateur a bien une famille)
   const needsFamilySetup = currentUser && currentUser.id !== "demo" && familiesLoaded && userFamilies.length === 0;
+  const mainAppVisible = currentUser && !needsFamilySetup && !familiesLoading;
+
+  // Visite guidée : une fois par utilisateur (par navigateur), à la première arrivée sur l'app principale.
+  useEffect(() => {
+    if (!mainAppVisible || !currentUser) return;
+    const seen = loadFromStorage(STORAGE_KEYS.onboardingSeen, []);
+    if (!seen.includes(currentUser.id)) setShowOnboarding(true);
+  }, [mainAppVisible, currentUser?.id]);
+
+  const handleFinishOnboarding = () => {
+    if (currentUser) {
+      const seen = loadFromStorage(STORAGE_KEYS.onboardingSeen, []);
+      if (!seen.includes(currentUser.id)) saveToStorage(STORAGE_KEYS.onboardingSeen, [...seen, currentUser.id]);
+    }
+    setShowOnboarding(false);
+  };
 
   return (
     <div className={`mp-root${darkMode ? " dark" : ""}`}>
@@ -1132,6 +1150,8 @@ const App = () => {
           )}
 
           <Toast toast={toast} />
+
+          {showOnboarding && <OnboardingTour onClose={handleFinishOnboarding} />}
         </>
       )}
     </div>

@@ -42,9 +42,12 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
       shopping.tsx              297  liste de courses
       templates.tsx             369  semaines types + écran dédié « Modèles »
       ingredients.tsx            86  catalogue d'ingrédients (écran « Ingrédients »)
+      onboarding.tsx            141  visite guidée (OnboardingTour)
       recipeSelection.tsx       188  sélecteur de recette pour un créneau
       recipes.tsx               915  CRUD recettes, mode cuisine
       calendar.tsx             1144  planning (jour/semaine/mois)
+    assets/
+      onboarding/                 7  captures d'écran utilisées par la visite guidée
   ```
 
   **Écrans de paramétrage (réorganisés)** : avant, « Mon compte » et « Préférences »
@@ -275,6 +278,27 @@ plus simple et plus sûr à maintenir que des upserts fins.
   recettes réelles de xiachufang.com (quantités vagues type « à volonté » converties en
   quantités concrètes). A enrichi le référentiel `ingredients` d'une trentaine de
   produits de cuisine chinoise (sauces, épices, tofu...).
+- **Visite guidée (`OnboardingTour`, `src/components/onboarding.tsx`)** — carrousel de
+  8 étapes (accueil + un pas par module : Calendrier, Recettes, Courses, Ingrédients,
+  Modèles, Famille, Mon compte), chaque étape module montrant une vraie capture d'écran
+  de l'app (compte démo) plutôt qu'une maquette. Déclenchée automatiquement à la
+  première arrivée sur l'app principale pour un utilisateur donné ; un flag local
+  (`STORAGE_KEYS.onboardingSeen`, tableau d'`userId` dans `localStorage`, pas de colonne
+  Supabase) évite qu'elle ne se réaffiche — choix délibéré pour rester cohérent avec le
+  reste des préférences purement locales (`darkMode`) et éviter une migration de schéma
+  pour une donnée non critique (revers : le flag est par navigateur, pas par compte —
+  un même utilisateur sur un nouvel appareil la reverra une fois). Rejouable à tout
+  moment via un bouton « Revoir la visite guidée » dans Mon compte (`onReplayOnboarding`
+  dans `viewProps.account`), qui contourne le flag sans le modifier.
+  **Ton volontairement décontracté (tutoiement)**, tranchant avec le reste de l'app qui
+  vouvoie partout ailleurs — demande explicite pour ce moment d'accueil précis, à ne
+  pas généraliser au reste des textes ni "corriger" par cohérence.
+  Les 7 captures dans `src/assets/onboarding/` ont été générées une fois via un script
+  Puppeteer (`puppeteer-core` piloté sur le Chrome déjà installé sur la machine, en
+  dehors du repo — aucune dépendance ajoutée à `package.json`) contre le serveur `npm
+  run dev` avec le compte démo, puis réduites via `sips`. Pas de pipeline automatisé :
+  si l'UI change significativement, les captures sont à régénérer à la main de la même
+  façon.
 
 ## Outillage — hooks Claude Code
 

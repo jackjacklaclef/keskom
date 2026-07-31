@@ -204,7 +204,7 @@ export const AllergyPicker = (props) => <IngredientRestrictionPicker {...props} 
 // ACCOUNT VIEW
 // ============================================================
 
-export const AccountView = ({ currentUser, activeFamily, ingredients, onLogout, onDeleteAccount, onUpdateUserProfile, onSetMyAvatar }) => {
+export const AccountView = ({ currentUser, activeFamily, ingredients, onLogout, onDeleteAccount, onUpdateUserProfile, onSetMyAvatar, onReplayOnboarding }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
@@ -405,6 +405,12 @@ export const AccountView = ({ currentUser, activeFamily, ingredients, onLogout, 
             onClick={() => setShowPrivacy(true)}>
             <Icon name="sliders" size={14} /> Politique de confidentialité
           </button>
+          {onReplayOnboarding && (
+            <button type="button" className="mp-btn mp-btn-secondary" style={{ justifyContent: "flex-start" }}
+              onClick={onReplayOnboarding}>
+              <Icon name="restaurant" size={14} /> Revoir la visite guidée
+            </button>
+          )}
         </div>
       </div>
 

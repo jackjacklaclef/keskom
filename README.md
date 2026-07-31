@@ -24,6 +24,8 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
   Vorace), co-administration.
 - **Profil** — régime alimentaire, allergies et aliments non appréciés, pris en compte
   dans les recettes et la liste de courses.
+- **Visite guidée** — petit tour du propriétaire à la première connexion, un écran par
+  module ; rejouable à tout moment depuis Mon compte.
 - **Compte démo** — utilisable sans backend, entièrement en local (voir plus bas).
 
 ## Démarrer en local
