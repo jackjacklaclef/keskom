@@ -148,3 +148,15 @@ export const STORAGE_KEYS = {
   registeredUsers: "mealPlanner_registeredUsers",
   families:        "mealPlanner_families",
 };
+
+export const ingredientCategories = [
+  { id: "viande", label: "Viandes & poissons", color: "berry", hex: colors.berry },
+  { id: "fruits", label: "Fruits", color: "amber", hex: colors.amber },
+  { id: "legumes", label: "Légumes", color: "sage", hex: colors.sage },
+  { id: "feculents", label: "Féculents", color: "clay", hex: colors.clay },
+  { id: "produits_laitiers", label: "Produits laitiers", color: "amber", hex: "#B08D3E" },
+  { id: "sauces", label: "Sauces & condiments", color: "berry", hex: "#A14B5C" },
+  { id: "epices", label: "Épices & herbes", color: "sage", hex: "#6B7F4F" },
+  { id: "boissons", label: "Boissons", color: "clay", hex: "#C66B3E" },
+  { id: "autres", label: "Autres", color: "neutral", hex: colors.inkSoft },
+];
