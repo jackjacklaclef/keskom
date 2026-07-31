@@ -782,6 +782,44 @@ const App = () => {
     } catch { showToast("Erreur lors de la mise à jour du repas", "clay"); }
   };
 
+  // ---- Déplacer / échanger un créneau (drag and drop) ----
+  const handleMoveMeal = async (sourceDateStr, sourceType, destDateStr, destType) => {
+    if (sourceDateStr === destDateStr && sourceType === destType) return;
+    const isSlotEmpty = (mp) => !mp || (mp.status === "normal" && (mp.recipeIds || []).length === 0);
+    const sourceMeal = familyMealPlans.find((mp) => mp.date === sourceDateStr && mp.type === sourceType);
+    if (isSlotEmpty(sourceMeal)) return;
+    const destMeal = familyMealPlans.find((mp) => mp.date === destDateStr && mp.type === destType);
+
+    const sourceData = { recipeIds: sourceMeal.recipeIds || [], status: sourceMeal.status || "normal", attendeeIds: sourceMeal.attendeeIds };
+    const destData = isSlotEmpty(destMeal)
+      ? { recipeIds: [], status: "normal", attendeeIds: undefined }
+      : { recipeIds: destMeal.recipeIds || [], status: destMeal.status || "normal", attendeeIds: destMeal.attendeeIds };
+
+    if (isDemo) {
+      setMealPlans((prev) => {
+        let next = prev.map((mp) => {
+          if (mp.id === sourceMeal.id) return { ...mp, recipeIds: destData.recipeIds, status: destData.status, ...(destData.attendeeIds !== undefined ? { attendeeIds: destData.attendeeIds } : {}) };
+          if (destMeal && mp.id === destMeal.id) return { ...mp, recipeIds: sourceData.recipeIds, status: sourceData.status, ...(sourceData.attendeeIds !== undefined ? { attendeeIds: sourceData.attendeeIds } : {}) };
+          return mp;
+        });
+        if (!destMeal) {
+          const resolvedAttendeeIds = sourceData.attendeeIds ?? (activeFamily?.members || []).map((m: any) => m.memberId || m.userId).filter(Boolean);
+          next = [...next, { id: `mv-${Date.now()}`, date: destDateStr, type: destType, recipeIds: sourceData.recipeIds, status: sourceData.status, attendeeIds: resolvedAttendeeIds, familyId: activeFamily?.id }];
+        }
+        return next;
+      });
+      return;
+    }
+
+    if (!activeFamily?.id) return;
+    try {
+      const sb = await getSupabase();
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, destDateStr, destType, sourceData.recipeIds, sourceData.status, sourceData.attendeeIds);
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, sourceDateStr, sourceType, destData.recipeIds, destData.status, destData.attendeeIds);
+      setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
+    } catch { showToast("Erreur lors du déplacement du repas", "clay"); }
+  };
+
   // ---- Courses ----
   const handleAddShoppingItem = async (item) => {
     if (isDemo) {
@@ -1088,7 +1126,7 @@ const App = () => {
   };
 
   const viewProps = {
-    calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [], ingredients, familyAllergies },
+    calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, onMoveMeal: handleMoveMeal, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [], ingredients, familyAllergies },
     recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: isDemo ? initialRecipes : recipes.filter((r) => r.scope === "global"), ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
     ingredients: { ingredients, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient },
