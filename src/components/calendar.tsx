@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import React from "react";
 
 import { space, radius } from "../theme";
@@ -244,6 +244,31 @@ export const AttendeeAvatarStack = ({ attendeeIds, familyMembers = [], max = 4 }
   );
 };
 
+// Poignée de glisser-déposer d'un créneau — seul point d'entrée du drag (souris ET
+// tactile via Pointer Events unifiés). Isolée du reste de la carte pour deux raisons :
+// ne jamais entrer en conflit avec le tap qui ouvre la modale de sélection de recette,
+// et surtout ne pas imposer `touch-action: none` à la carte entière (ce qui bloquerait
+// le scroll tactile de la page dès qu'un créneau est rempli) — seule cette petite zone
+// perd le scroll natif.
+const DragHandle = ({ dateStr, type, meta, onDown, onMove, onUp, onCancel }) => (
+  <span
+    onPointerDown={onDown(dateStr, type, meta)}
+    onPointerMove={onMove}
+    onPointerUp={onUp}
+    onPointerCancel={onCancel}
+    onClick={(e) => e.stopPropagation()}
+    title="Glisser pour déplacer"
+    style={{
+      position: "absolute", top: 2, right: 2,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      width: "1.9rem", height: "1.9rem", touchAction: "none",
+      cursor: "grab", color: "var(--ink-faint)", userSelect: "none",
+    }}
+  >
+    <Icon name="grip" size={14} />
+  </span>
+);
+
 // Panneau de détail d'une journée — s'insère sous la ligne de semaine
 export const DayPanel = ({
   date, dateStr, mealPlans, recipes, recentRecipeIds,
@@ -428,11 +453,22 @@ export const DayPanel = ({
 // Un créneau est considéré vide (rien à déplacer / rien à échanger) s'il n'a ni recette ni statut particulier.
 const isMealSlotEmpty = (meal) => !meal || (meal.status === "normal" && (meal.recipeIds || []).length === 0);
 
+// En dessous de ce seuil (px), un pointerdown+pointermove sur la poignée reste un tap
+// (ouvre la modale) plutôt qu'un glisser — absorbe le tremblement naturel du doigt/souris.
+const DRAG_THRESHOLD_PX = 6;
+// Une icône par type de repas plutôt qu'un simple point coloré — la couleur (ambre/
+// argile/sauge) reste le signal principal, l'icône renforce la lecture visuelle.
+const mealTypeIconName = (typeId) => typeId === "breakfast" ? "sunrise" : typeId === "dinner" ? "moon" : "cat-main";
+
 export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMoveMeal, recentRecipeIds = [], weekTemplates = [], onApplyTemplate, onDuplicateWeek, onClearWeek, onNavigate, familyMembers = [], ingredients = [], familyAllergies = {} }) => {
   const [viewMode, setViewMode] = useState("week");
-  // Drag and drop d'un créneau vers un autre (échange si la destination n'est pas vide)
+  // Drag and drop d'un créneau vers un autre (échange si la destination n'est pas vide) —
+  // Pointer Events unifiés souris/tactile, déclenchés uniquement depuis <DragHandle>.
   const [dragSource, setDragSource] = useState(null); // {dateStr, type}
   const [dragOverKey, setDragOverKey] = useState(null); // `${dateStr}|${type}`
+  const [dragPreview, setDragPreview] = useState(null); // {x, y, label, dotColor} — chip flottant sous le doigt/curseur
+  const pointerDragRef = useRef(null); // état transitoire pré-seuil, pas de re-render tant qu'on n'a pas commité le drag
+  const dragRafRef = useRef(null); // coalesce les pointermove à ~1 update/frame
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [weekEditingSlot, setWeekEditingSlot] = useState(null);
@@ -572,30 +608,81 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
   const getMeal = (dateStr, type) => mealPlans.find((mp) => mp.date === dateStr && mp.type === type);
 
   const cellKey = (dateStr, type) => `${dateStr}|${type}`;
-  const handleSlotDragStart = (dateStr, type) => (e) => {
-    e.dataTransfer.effectAllowed = "move";
-    try { e.dataTransfer.setData("text/plain", cellKey(dateStr, type)); } catch {}
-    setDragSource({ dateStr, type });
-  };
-  const handleSlotDragOver = (dateStr, type) => (e) => {
-    if (!dragSource) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverKey(cellKey(dateStr, type));
-  };
-  const handleSlotDrop = (dateStr, type) => (e) => {
-    e.preventDefault();
-    const source = dragSource;
+
+  const resetDrag = () => {
     setDragSource(null);
     setDragOverKey(null);
-    if (!source || !onMoveMeal) return;
-    if (source.dateStr === dateStr && source.type === type) return;
-    onMoveMeal(source.dateStr, source.type, dateStr, type);
+    setDragPreview(null);
   };
-  const handleSlotDragEnd = () => { setDragSource(null); setDragOverKey(null); };
+
+  const handlePointerDown = (dateStr, type, meta) => (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.stopPropagation(); // ne doit jamais déclencher le onClick de la carte parente
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pointerDragRef.current = {
+      pointerId: e.pointerId, dateStr, type,
+      startX: e.clientX, startY: e.clientY, committed: false,
+      label: meta.label, dotColor: meta.dotColor,
+    };
+  };
+
+  const handlePointerMove = (e) => {
+    const drag = pointerDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    if (dragRafRef.current) return; // coalesce à ~1 update/frame
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+      if (!drag.committed) {
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+        drag.committed = true;
+        setDragSource({ dateStr: drag.dateStr, type: drag.type });
+      }
+      setDragPreview({ x: e.clientX, y: e.clientY, label: drag.label, dotColor: drag.dotColor });
+      const cellEl = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-cell-key]");
+      setDragOverKey(cellEl ? cellEl.getAttribute("data-cell-key") : null);
+    });
+  };
+
+  const handlePointerUp = (e) => {
+    const drag = pointerDragRef.current;
+    pointerDragRef.current = null;
+    if (drag && drag.pointerId === e.pointerId && drag.committed) {
+      const cellEl = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-cell-key]");
+      const destKey = cellEl?.getAttribute("data-cell-key");
+      if (destKey && onMoveMeal) {
+        const [destDateStr, destType] = destKey.split("|");
+        if (!(destDateStr === drag.dateStr && destType === drag.type)) {
+          onMoveMeal(drag.dateStr, drag.type, destDateStr, destType);
+        }
+      }
+    }
+    resetDrag();
+  };
+
+  const handlePointerCancel = () => {
+    pointerDragRef.current = null;
+    resetDrag();
+  };
 
   return (
     <div>
+      {/* Chip flottant affiché pendant un glisser de créneau — suit le doigt/curseur.
+          pointerEvents:"none" est indispensable : sinon elementFromPoint (utilisé pour
+          détecter la case survolée) toucherait le chip au lieu de la case en dessous. */}
+      {dragPreview && (
+        <div style={{
+          position: "fixed", left: dragPreview.x, top: dragPreview.y,
+          transform: "translate(-50%, -130%)", pointerEvents: "none", zIndex: 999,
+          background: "var(--paper-raised)", border: `1.5px solid ${dragPreview.dotColor}`,
+          borderRadius: radius.sm, padding: "0.35rem 0.6rem", boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
+          maxWidth: "12rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }} className="mp-small">
+          {dragPreview.label}
+        </div>
+      )}
+
       {/* ── Ligne 1 : navigation temporelle + sélecteur de vue ── */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
         {/* Flèches + titre — masqués en vue custom */}
@@ -767,7 +854,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                     background: "var(--paper-sunken)", border: "1px solid var(--line)",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem",
                   }}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                    <span style={{ color: dotColor, display: "inline-flex", flexShrink: 0 }}><Icon name={mealTypeIconName(type.id)} size={13} /></span>
                     <span className="mp-week-meal-label-full mp-micro" style={{ fontWeight: 700, color: dotColor, textTransform: "uppercase" }}>
                       {type.label}
                     </span>
@@ -819,24 +906,30 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                       const isFilled = !isMealSlotEmpty(meal);
                       const isDragOver = dragOverKey === cellKey(dateStr, type.id);
                       const isBeingDragged = dragSource && dragSource.dateStr === dateStr && dragSource.type === type.id;
+                      const dragLabel = status === "restaurant" ? "Restaurant" : status === "skip" ? "Pas de repas" : names.join(", ");
 
                       return (
                         <button key={type.id} type="button"
+                          data-cell-key={cellKey(dateStr, type.id)}
                           onClick={() => setWeekEditingSlot({ dateStr, type: type.id, mealId: meal?.id || null })}
-                          draggable={isFilled}
-                          onDragStart={isFilled ? handleSlotDragStart(dateStr, type.id) : undefined}
-                          onDragOver={handleSlotDragOver(dateStr, type.id)}
-                          onDrop={handleSlotDrop(dateStr, type.id)}
-                          onDragEnd={handleSlotDragEnd}
-                          title={isFilled ? "Glisser pour déplacer vers un autre créneau" : undefined}
                           style={{
-                            width: "100%", boxSizing: "border-box",
-                            background: bgColor, border: isDragOver ? "1.5px dashed var(--clay)" : `1px solid ${borderColor}`,
-                            borderRadius: radius.sm, padding: "0.55rem 0.65rem",
-                            cursor: isFilled ? "grab" : "pointer", textAlign: "left", fontFamily: "inherit",
-                            transition: "background 100ms, border-color 100ms", minHeight: "4rem",
-                            opacity: isBeingDragged ? 0.4 : 1,
+                            width: "100%", boxSizing: "border-box", position: "relative",
+                            background: isDragOver ? "var(--clay-wash)" : bgColor,
+                            borderTop: isDragOver ? "1.5px dashed var(--clay)" : `1px solid ${borderColor}`,
+                            borderRight: isDragOver ? "1.5px dashed var(--clay)" : `1px solid ${borderColor}`,
+                            borderBottom: isDragOver ? "1.5px dashed var(--clay)" : `1px solid ${borderColor}`,
+                            borderLeft: `3px solid ${isFilled ? dotColor : "var(--line)"}`,
+                            borderRadius: radius.sm, padding: `${space.xs} ${isFilled ? "2rem" : space.sm}`,
+                            cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                            transition: "background 100ms, border-color 100ms",
+                            transform: isBeingDragged ? "scale(1.03)" : "scale(1)",
+                            boxShadow: isBeingDragged ? "0 8px 20px rgba(0,0,0,0.18)" : "none",
+                            minHeight: "4rem", opacity: isBeingDragged ? 0.55 : 1,
                           }}>
+                          {isFilled && (
+                            <DragHandle dateStr={dateStr} type={type.id} meta={{ label: dragLabel, dotColor }}
+                              onDown={handlePointerDown} onMove={handlePointerMove} onUp={handlePointerUp} onCancel={handlePointerCancel} />
+                          )}
                           {status === "restaurant" && (
                             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}>
                               <Icon name="restaurant" size={13} />
@@ -998,7 +1091,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                 const dotColor = type.color === "amber" ? "var(--amber)" : type.color === "clay" ? "var(--clay)" : "var(--sage)";
                 return (
                   <div key={type.id} style={{ textAlign: "center", padding: "0.4rem 0.3rem", borderRadius: radius.sm, background: "var(--paper-sunken)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem" }}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                    <span style={{ color: dotColor, display: "inline-flex", flexShrink: 0 }}><Icon name={mealTypeIconName(type.id)} size={13} /></span>
                     <span className="mp-week-meal-label-full mp-micro" style={{ fontWeight: 700, color: dotColor, textTransform: "uppercase" }}>{type.label}</span>
                     <span className="mp-week-meal-label-short mp-micro" style={{ fontWeight: 700, color: dotColor, textTransform: "uppercase" }}>{type.short}</span>
                   </div>
@@ -1030,16 +1123,29 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                       const isFilled = !isPast && !isMealSlotEmpty(meal);
                       const isDragOver = !isPast && dragOverKey === cellKey(dateStr, type.id);
                       const isBeingDragged = dragSource && dragSource.dateStr === dateStr && dragSource.type === type.id;
+                      const dragLabel = status === "restaurant" ? "Restaurant" : status === "skip" ? "Pas de repas" : names.join(", ");
                       return (
                         <button key={type.id} type="button"
+                          data-cell-key={isPast ? undefined : cellKey(dateStr, type.id)}
                           onClick={() => !isPast && setWeekEditingSlot({ dateStr, type: type.id, mealId: meal?.id || null })}
-                          draggable={isFilled}
-                          onDragStart={isFilled ? handleSlotDragStart(dateStr, type.id) : undefined}
-                          onDragOver={isPast ? undefined : handleSlotDragOver(dateStr, type.id)}
-                          onDrop={isPast ? undefined : handleSlotDrop(dateStr, type.id)}
-                          onDragEnd={handleSlotDragEnd}
-                          title={isFilled ? "Glisser pour déplacer vers un autre créneau" : undefined}
-                          style={{ width: "100%", boxSizing: "border-box", background: bgColor, border: isDragOver ? "1.5px dashed var(--clay)" : `1px solid ${borderColor}`, borderRadius: radius.sm, padding: "0.55rem 0.65rem", cursor: isPast ? "default" : isFilled ? "grab" : "pointer", textAlign: "left", fontFamily: "inherit", transition: "background 100ms, border-color 100ms", minHeight: "4rem", opacity: isBeingDragged ? 0.4 : isPast ? 0.55 : 1 }}>
+                          style={{
+                            width: "100%", boxSizing: "border-box", position: "relative",
+                            background: isDragOver ? "var(--clay-wash)" : bgColor,
+                            borderTop: isDragOver ? "1.5px dashed var(--clay)" : `1px solid ${borderColor}`,
+                            borderRight: isDragOver ? "1.5px dashed var(--clay)" : `1px solid ${borderColor}`,
+                            borderBottom: isDragOver ? "1.5px dashed var(--clay)" : `1px solid ${borderColor}`,
+                            borderLeft: `3px solid ${isFilled ? dotColor : "var(--line)"}`,
+                            borderRadius: radius.sm, padding: `${space.xs} ${isFilled ? "2rem" : space.sm}`,
+                            cursor: isPast ? "default" : "pointer", textAlign: "left", fontFamily: "inherit",
+                            transition: "background 100ms, border-color 100ms",
+                            transform: isBeingDragged ? "scale(1.03)" : "scale(1)",
+                            boxShadow: isBeingDragged ? "0 8px 20px rgba(0,0,0,0.18)" : "none",
+                            minHeight: "4rem", opacity: isBeingDragged ? 0.55 : isPast ? 0.55 : 1,
+                          }}>
+                          {isFilled && (
+                            <DragHandle dateStr={dateStr} type={type.id} meta={{ label: dragLabel, dotColor }}
+                              onDown={handlePointerDown} onMove={handlePointerMove} onUp={handlePointerUp} onCancel={handlePointerCancel} />
+                          )}
                           {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
                           {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><span className="mp-small" style={{ color: "var(--ink)", lineHeight: 1.4 }}>{names.join(", ")}</span><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} /></div><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}

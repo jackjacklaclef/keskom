@@ -47,6 +47,8 @@ export const Icon = ({ name, size = 16 }) => {
     skip: <><circle cx="12" cy="12" r="9"/><line x1="6" y1="6" x2="18" y2="18"/></>,
     // Dé à 6 faces
     dice: <><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none"/></>,
+    // Poignée de glisser — 6 points, deux colonnes
+    grip: <><circle cx="9" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.3" fill="currentColor" stroke="none"/></>,
     // ---- Catégories de recettes ----
     // Soleil levant — petit-déjeuner (réutilise sunrise)
     "cat-breakfast": <><path d="M12 2v3M4.22 6.22l2.12 2.12M2 14h3M19 14h3M17.66 8.34l2.12-2.12"/><path d="M5.5 17a6.5 6.5 0 0 1 13 0"/><line x1="2" y1="21" x2="22" y2="21"/></>,

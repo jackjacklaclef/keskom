@@ -355,12 +355,11 @@ plus simple et plus sûr à maintenir que des upserts fins.
 - **Drag and drop d'un créneau vers un autre (vues Semaine et Perso)** — glisser une
   case de repas non vide vers une autre case (n'importe quel jour × type de repas)
   déplace son contenu ; si la case de destination n'est pas vide, échange les deux
-  contenus plutôt que d'écraser. DnD HTML5 natif (`draggable`, `onDragStart`/
-  `onDragOver`/`onDrop`), pas de librairie ajoutée. Seules les cases non vides sont
-  `draggable` ; n'importe quelle case (vide ou non) est une cible de drop valide ; les
-  jours passés de la vue Perso restent non-draggable/non-droppable, cohérent avec leur
-  traitement lecture-seule existant. Vue Mois non concernée (un seul jour visible à la
-  fois dans `DayPanel`, pas de destination inter-jour pertinente).
+  contenus plutôt que d'écraser. Seules les cases non vides ont une poignée de glisser ;
+  n'importe quelle case (vide ou non) est une cible de drop valide ; les jours passés de
+  la vue Perso restent sans poignée/non-cible, cohérent avec leur traitement
+  lecture-seule existant. Vue Mois non concernée (un seul jour visible à la fois dans
+  `DayPanel`, pas de destination inter-jour pertinente).
   - **Handler** : `handleMoveMeal(sourceDateStr, sourceType, destDateStr, destType)`
     dans `App.tsx`, à côté de `handleAddMeal`/`handleUpdateMeal`, branché sur
     `viewProps.calendar.onMoveMeal`. Lit le contenu des deux créneaux, écrit celui de la
@@ -370,12 +369,58 @@ plus simple et plus sûr à maintenir que des upserts fins.
     jour synchrone du state local ; compte réel → deux `upsertMealSlot` séquentiels
     (jamais en parallèle, pour éviter une course entre les deux refetch complets qui
     suivent chaque écriture) puis un seul refetch final — même idiome que
-    `handleApplyTemplate`/`handleDuplicateWeek`.
-  - **Front** : logique dans `src/components/calendar.tsx` (Week + Custom views,
-    structure de grille identique). Vérifié en conditions réelles (compte démo, via un
-    script Puppeteer jetable hors repo — même méthode que pour les captures
-    d'onboarding) : échange de deux créneaux remplis, puis déplacement d'un créneau
-    rempli vers un créneau vide.
+    `handleApplyTemplate`/`handleDuplicateWeek`. **Inchangé depuis sa création** —
+    seule l'interaction de détection du glisser a changé (voir point suivant), pas la
+    logique métier d'échange/déplacement.
+  - **Interaction — Pointer Events, pas de DnD HTML5 natif** (`src/components/
+    calendar.tsx`, Week + Custom views, structure de grille identique) : la première
+    version (même session) utilisait `draggable`/`onDragStart`/`onDragOver`/`onDrop`
+    HTML5, qui **ne se déclenche pas du tout au toucher** sur mobile Safari/Chrome —
+    corrigé avant la fin de la session, remplacé par une implémentation Pointer Events
+    unifiée souris+tactile (`onPointerDown`/`onPointerMove`/`onPointerUp`/
+    `onPointerCancel`), seule façon de couvrir les deux à la fois sans dupliquer la
+    logique. Le glisser part uniquement d'une poignée dédiée (`DragHandle`, icône
+    `grip`, coin haut-droit de la carte) plutôt que de la carte entière — contrainte
+    technique : `touch-action` se fixe pour toute la durée du geste dès le
+    `pointerdown`, donc le mettre sur la carte entière aurait bloqué le scroll tactile
+    de la page dès qu'un créneau est rempli (quasi toute la grille dès qu'une semaine
+    est planifiée) ; le scoper à la poignée (~2rem) préserve le scroll partout ailleurs.
+    Décision validée avec l'utilisateur (impliquait de changer aussi le comportement
+    desktop, qui permettait avant de glisser depuis n'importe où sur la carte).
+    Mécanique : seuil de 6px avant de committer le glisser (absorbe le tremblement,
+    laisse un tap simple ouvrir la modale), détection de la case survolée via
+    `document.elementFromPoint` + attribut `data-cell-key` posé sur chaque bouton de
+    créneau (plus fiable qu'une déduction depuis la structure DOM), chip flottant
+    (`dragPreview`, `position: fixed`, `pointerEvents: "none"` — indispensable, sinon
+    `elementFromPoint` toucherait le chip au lieu de la case en dessous) qui suit le
+    doigt/curseur pendant le geste. `onClick={(e) => e.stopPropagation()}` sur la
+    poignée est nécessaire en plus du `stopPropagation()` sur `pointerdown` : ce dernier
+    n'empêche pas l'événement `click` de bulle séparément jusqu'au bouton parent, un tap
+    rapide sur la poignée ouvrirait sinon quand même la modale.
+  - **Vérifié en conditions réelles** (compte démo, scripts Puppeteer jetables hors
+    repo — même méthode que pour les captures d'onboarding) : `page.mouse` pour le
+    glisser souris (`pointerType: "mouse"`), `page.touchscreen`/CDP `Input.
+    dispatchTouchEvent` pour un vrai glisser tactile (`pointerType: "touch"`, plus
+    fidèle que l'émulation "device toolbar" de DevTools) — échange de deux créneaux
+    remplis, déplacement d'un créneau rempli vers un créneau vide, tap rapide sur la
+    poignée sans effet (pas d'ouverture accidentelle de la modale), et confirmation que
+    le scroll tactile démarré depuis le corps de la carte (hors poignée) fonctionne
+    toujours normalement.
+- **Polish visuel de la carte de repas** — remplace le point coloré (7×7px) par une
+  icône `Icon` distincte par type de repas (`sunrise` petit-déjeuner, `cat-main`
+  déjeuner, `moon` dîner — ce dernier réutilise l'icône du mode sombre, contexte
+  différent donc pas de conflit), différenciation renforcée par la couleur
+  (ambre/argile/sauge) en plus de la forme. Ajoute une barre d'accent à gauche
+  (`borderLeft` 3px, couleur du type de repas si la case est remplie) pour un repérage
+  visuel de la colonne sans lire le texte — implémentée avec `borderTop`/`borderRight`/
+  `borderBottom`/`borderLeft` explicites plutôt que le raccourci `border` + une
+  surcharge `borderLeft`, React avertissant (dev warning) sur le mélange des deux pour
+  la même case. Espacements repris sur les tokens `space.xs`/`space.sm` existants
+  (`src/theme.tsx`). Seule nouvelle icône ajoutée à `src/components/ui.tsx` : `grip`
+  (poignée de glisser, six points pleins, même convention d'auteurage que `dice`).
+  Scope volontairement limité aux vues Semaine et Perso (mêmes axes que le point
+  précédent) — pas de photo de recette sur la carte (aucun champ photo au niveau
+  recette en base, seulement `recipe_steps.media_url` par étape).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
