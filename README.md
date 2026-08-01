@@ -26,8 +26,8 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
 - **Recettes** — catalogue partagé (recettes globales) + recettes privées ou partagées
   au sein d'une famille, variantes d'une recette existante, étapes numérotées avec
   minuteur et photo, mode « Cuisine » pas-à-pas. Pays d'origine et temps de
-  préparation/cuisson affichés sur chaque recette, photo du plat sur un premier
-  échantillon de recettes du catalogue partagé.
+  préparation/cuisson affichés sur chaque recette, photo du plat pour toutes les
+  recettes du catalogue partagé.
 - **Liste de courses** — générée automatiquement à partir du planning sur une période
   donnée, en tenant compte du nombre de portions de chaque recette et de l'appétit de
   chaque convive.

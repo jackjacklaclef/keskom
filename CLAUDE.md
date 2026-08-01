@@ -631,6 +631,29 @@ plus simple et plus sûr à maintenir que des upserts fins.
     `STEPS[1].text`) mise à jour pour mentionner explicitement ce bouton — capture
     d'écran non régénérée (le pipeline est manuel, une simple modification de texte
     ne le justifiait pas).
+  - **Photo étendue aux 55 recettes globales** (tour suivant, demande explicite —
+    l'échantillon de 5 est validé) : mêmes principes que l'échantillon (URL externe
+    CC, pas de bucket Storage), recherches faites via l'API Openverse (agrège
+    Wikimedia Commons et Flickr, filtrées `license_type=commercial`). Attribution
+    enrichie pour préciser la source réelle de l'image (« Flickr » vs « Wikimedia
+    Commons », déduit du domaine de l'URL) plutôt que de l'indiquer en dur comme
+    pour l'échantillon initial (qui ne venait que de Wikimedia).
+    **Contrôle qualité nécessaire** : les premiers résultats de recherche par mots-clés
+    anglais contenaient plusieurs faux amis repérés et corrigés avant application en
+    base — ex. « Slow-cooker venison neck roast » (chevreuil) proposé pour le quinoa
+    aux légumes rôtis, « Maine Lobster... on Tostones » pour le cabillaud au four,
+    une photo de romanesco sans lien pour les brocolis à l'ail, un plat mixte
+    mentionnant juste au passage « Braised Tofu » parmi 4 autres composants pour le
+    tofu braisé — 8 recherches ont dû être refaites avec des termes plus précis.
+    Script de sélection en 2 passes jetable (hors repo,
+    `scratchpad/photos2/`) : recherche large puis vérification manuelle des titres
+    avant de committer les URLs, plutôt qu'auto-sélectionner le premier résultat —
+    la leçon du bug carbonara-au-saumon (contenu généré sans vérification) s'applique
+    aussi bien aux photos qu'au texte. Les 50 URLs testées une à une (curl, 200 OK)
+    avant écriture en base.
+    Vérifié avec le compte de test réel : les 55 cartes de la Base commune chargent
+    bien leur image (0 lien cassé), capture pleine page de la grille contrôlée
+    visuellement.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
