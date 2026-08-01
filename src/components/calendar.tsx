@@ -69,7 +69,9 @@ const RecipeNamesList = ({ recipeIds, recipes }) => {
           <React.Fragment key={r.id}>
             {i > 0 && ", "}
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
-              {cat && (
+              {r.photoUrl ? (
+                <img src={r.photoUrl} alt="" style={{ width: "0.9rem", height: "0.9rem", borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: cat ? `1.5px solid ${cat.hex}` : "1.5px solid var(--line)" }} />
+              ) : cat && (
                 <span style={{ color: cat.hex, display: "inline-flex", flexShrink: 0 }}>
                   <CategoryIcon icon={cat.icon} size={12} />
                 </span>
