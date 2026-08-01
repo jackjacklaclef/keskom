@@ -21,7 +21,7 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
 
   ```
   src/
-    App.tsx                    1141  composant App racine (state, handlers, routing)
+    App.tsx                    1235  composant App racine (state, handlers, routing)
     main.tsx                      9  point d'entrée Vite
     theme.tsx                   641  design tokens + GlobalStyle
     constants.ts                163  constantes métier (catégories, régimes, etc.)
@@ -29,11 +29,11 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
     lib/
       supabaseClient.ts          47  client Supabase (getSupabase())
       authService.ts            272  AuthService
-      dataLayer.ts              345  fetch*/save* Supabase (14 fonctions)
+      dataLayer.ts              378  fetch*/save* Supabase (14 fonctions)
       storage.ts                656  localStorage + démo + jeu de données mock
       dateUtils.ts               23  todayStr/getMondayOf/dateOfSlot
     components/
-      ui.tsx                    413  primitives UI génériques
+      ui.tsx                    416  primitives UI génériques
       layout.tsx                216  Sidebar/MobileDrawer/FamilySelector
       auth.tsx                  370  écrans de connexion/inscription
       privacy.tsx                55  politique de confidentialité
@@ -43,9 +43,9 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
       templates.tsx             369  semaines types + écran dédié « Modèles »
       ingredients.tsx            86  catalogue d'ingrédients (écran « Ingrédients »)
       onboarding.tsx            141  visite guidée (OnboardingTour)
-      recipeSelection.tsx       188  sélecteur de recette pour un créneau
+      recipeSelection.tsx       207  sélecteur de recette pour un créneau
       recipes.tsx               915  CRUD recettes, mode cuisine
-      calendar.tsx             1144  planning (jour/semaine/mois)
+      calendar.tsx             1633  planning (jour/semaine/mois)
     assets/
       onboarding/                 7  captures d'écran utilisées par la visite guidée
   ```
@@ -157,12 +157,15 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
   connu ci-dessous : le GRANT SQL sur la table semble manquant, indépendamment de la
   policy RLS.**
 - `meal_plans` (un par famille+date) → `meal_plan_meals` (un par type de repas ce
-  jour-là, avec `status`) → `meal_plan_meal_recipes` (recettes du repas) +
-  `meal_plan_meal_attendees` (membres présents à ce repas — `member_id`, remplacement
-  complet à chaque sauvegarde). Un nouveau créneau sans `attendeeIds` explicite est
-  peuplé par défaut avec **tous** les membres de la famille active. La liste de courses
-  pondère chaque repas par la somme des multiplicateurs d'appétit des présents plutôt
-  qu'un simple headcount.
+  jour-là, avec `status`, `restaurant_name`, `restaurant_url`) → `meal_plan_meal_recipes`
+  (recettes du repas) + `meal_plan_meal_attendees` (membres présents à ce repas —
+  `member_id`, remplacement complet à chaque sauvegarde). Un nouveau créneau sans
+  `attendeeIds` explicite est peuplé par défaut avec **tous** les membres de la famille
+  active. La liste de courses pondère chaque repas par la somme des multiplicateurs
+  d'appétit des présents plutôt qu'un simple headcount. `restaurant_name`/`restaurant_url`
+  (texte libre + lien, typiquement Google Maps) ne sont renseignés que pour le statut
+  `restaurant` — voir « Lieu du restaurant » dans Fonctionnalités ajoutées après la
+  migration.
 - `shopping_list_items`, `week_templates` — créées pendant la migration, n'existaient
   pas avant (pas d'équivalent local-storage).
 - `diets` (référentiel, 9 régimes) / `profile_diets` (many-to-many) /
@@ -260,6 +263,31 @@ plus simple et plus sûr à maintenir que des upserts fins.
     Corrigé en ancrant les deux branches à midi (`new Date(..., 12)`), plutôt que de
     ne patcher que la branche mois — évite de laisser la branche semaine/perso
     « correcte par chance » selon l'heure de la journée.
+15. **Glisser-déposer d'un repas : convives non transférés vers une case vide**
+    (`handleMoveMeal`, `src/App.tsx`) — repéré en creusant le signalement « les
+    convives ne sont pas transférés » sur un glisser vers une case vide (pas un
+    échange). `destData` (contenu à réécrire sur la case source une fois son ancien
+    contenu déplacé vers la destination) posait `attendeeIds: undefined` pour une
+    case de destination vide, or `undefined` a une signification précise dans
+    `upsertMealSlot` (« ne pas toucher la sélection existante ») — sur une case
+    source qui existe déjà, ça laissait donc les anciens `meal_plan_meal_attendees`
+    en place au lieu de les vider. Confirmé par un test empirique (compte
+    `rls-test-a`, glisser réel via `page.mouse`) : un repas avec des convives
+    déplacé vers une case vide gardait ces convives sur la case source désormais
+    vide, tandis que la destination recevait bien les bons convives (elle, écrite
+    avec `attendeeIds` explicite). Corrigé en remplaçant `undefined` par `[]` dans
+    ce cas précis — un échange entre deux cases pleines n'était lui pas affecté
+    (les deux `attendeeIds` sont alors toujours des tableaux explicites). Testé à
+    nouveau après correctif : case vidée correctement à la source, échange
+    bidirectionnel (recettes + convives) également revérifié.
+16. **Convives non éditables pour un repas Restaurant/Pas de repas**
+    (`RecipeSelectionModal`, `src/components/recipeSelection.tsx`) — le bloc
+    « Convives présents » avait `opacity`/`pointerEvents: none` dès que
+    `status !== "normal"`, alors que ces deux statuts concernent quand même des
+    personnes (ex. qui va au restaurant). Seul le bloc de sélection des recettes
+    (`RecipeRow`) doit rester désactivé pour ces statuts (choisir un plat n'a pas
+    de sens hors "normal") — la désactivation du bloc convives a été retirée sans
+    toucher à celle des recettes.
 
 ## Bugs connus, non corrigés
 
@@ -729,6 +757,49 @@ plus simple et plus sûr à maintenir que des upserts fins.
     à 390×844 — rien de cassé, seul un détail préexistant mineur repéré (le nom d'une
     recette peut se couper avant la virgule séparant deux plats dans
     `RecipeNamesList`), non corrigé car hors scope de la demande.
+- **Lieu du restaurant (nom + lien Google Maps)** — demande explicite, groupée avec
+  deux corrections sur le même écran (voir bugs 15/16 ci-dessus : convives non
+  transférés au glisser-déposer, convives non éditables pour Restaurant/Pas de repas).
+  Quand le statut d'un créneau est « Restaurant », deux champs texte optionnels
+  apparaissent dans `RecipeSelectionModal` (`src/components/recipeSelection.tsx`) :
+  nom du restaurant et lien (typiquement Google Maps, mais n'importe quelle URL est
+  acceptée — pas de validation de domaine, cohérent avec le reste de l'app qui ne
+  valide pas non plus les URLs de recettes importées). Persistés dans deux nouvelles
+  colonnes `meal_plan_meals.restaurant_name`/`restaurant_url` (migration
+  `add_restaurant_fields_to_meal_plan_meals`), toujours écrites (pas de sémantique
+  `undefined` = « ne pas toucher » comme pour `attendeeIds` : si le statut repasse à
+  normal/skip, les deux sont explicitement remises à `null`). Affiché sur la carte de
+  repas dans les 3 vues (`DayPanel`/Semaine/Perso) à la place du texte statique
+  « Restaurant » — nom du restaurant si renseigné (sinon fallback « Restaurant »), et
+  une icône `map-pin` cliquable (nouvelle icône dans `src/components/ui.tsx`, même
+  convention que les icônes de catégorie) ouvrant le lien dans un nouvel onglet quand
+  il est renseigné, avec `stopPropagation` pour ne pas rouvrir l'éditeur du créneau.
+  `handleMoveMeal`/`handleAddMeal`/`handleUpdateMeal` (`src/App.tsx`) et
+  `upsertMealSlot` (`src/lib/dataLayer.ts`) propagent ces deux champs comme le reste
+  du contenu d'un créneau (recettes/statut/convives), y compris lors d'un
+  glisser-déposer.
+  - **Bug latent découvert et corrigé en cours de route** : `QuickPlanModal`
+    (accessible depuis le bouton flottant « + », `src/components/calendar.tsx`) ne
+    passait jamais de prop `onSaveStatus` à `RecipeSelectionModal` — choisir
+    Restaurant ou Pas de repas puis valider depuis ce point d'entrée précis aurait
+    appelé une fonction `undefined` (`TypeError`, crash silencieux de la modale).
+    Jamais remarqué car ce chemin spécifique n'avait apparemment jamais été testé
+    avec un statut non-normal. Corrigé en câblant `onSaveStatus` comme les 3 autres
+    points d'entrée (`DayPanel`, vue Semaine, vue Perso).
+  - **Vérifié avec le compte de test réel** (`rls-test-a`, famille A) : glisser d'un
+    repas avec convives (sous-ensemble, pas juste « tout le monde »/« personne »)
+    vers une case vide → convives correctement présents à la destination et
+    correctement vidés à la source (confirmait le bug 15 puis son correctif) ;
+    glisser en échange entre deux cases pleines (recettes + convives différents des
+    deux côtés) → échange complet et correct des deux côtés ; passage au statut
+    Restaurant → bloc convives redevient cliquable (`pointerEvents: auto`,
+    `opacity: 1`, vérifié par lecture du style calculé) et un convive retiré via
+    clic est bien répercuté en base ; nom + lien saisis (« Chez Mario » +
+    URL Maps) → persistés en base et affichés sur la carte avec l'icône lien
+    cliquable. Fixture temporaire (second membre de famille « Membre Test 2 »,
+    nécessaire pour distinguer un sous-ensemble de convives de « tout le monde »)
+    supprimée après vérification, famille A revenue à son état d'origine
+    (un seul membre réel, `RLS Test A`).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

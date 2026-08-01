@@ -758,29 +758,31 @@ const App = () => {
     const recipeIds = mealData?.recipeIds || [];
     const status = mealData?.status || "normal";
     const attendeeIds = mealData?.attendeeIds;
+    const restaurantName = mealData?.restaurantName ?? null;
+    const restaurantUrl = mealData?.restaurantUrl ?? null;
     if (isDemo) {
       const resolvedAttendeeIds = attendeeIds ?? (activeFamily?.members || []).map((m: any) => m.memberId || m.userId).filter(Boolean);
-      setMealPlans((prev) => [...prev, { id: Date.now().toString(), date, recipeIds, type, status, attendeeIds: resolvedAttendeeIds, familyId: activeFamily?.id }]);
+      setMealPlans((prev) => [...prev, { id: Date.now().toString(), date, recipeIds, type, status, attendeeIds: resolvedAttendeeIds, restaurantName, restaurantUrl, familyId: activeFamily?.id }]);
       return;
     }
     if (!activeFamily?.id) return;
     try {
       const sb = await getSupabase();
-      await upsertMealSlot(sb, activeFamily.id, currentUser.id, date, type, recipeIds, status, attendeeIds);
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, date, type, recipeIds, status, attendeeIds, restaurantName, restaurantUrl);
       setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
     } catch { showToast("Erreur lors de la planification du repas", "clay"); }
   };
 
-  const handleUpdateMeal = async (mealId, recipeIds, status = "normal", attendeeIds?: string[]) => {
+  const handleUpdateMeal = async (mealId, recipeIds, status = "normal", attendeeIds?: string[], restaurantName: string | null = null, restaurantUrl: string | null = null) => {
     if (isDemo) {
-      setMealPlans((prev) => prev.map((mp) => mp.id === mealId ? { ...mp, recipeIds, status, ...(attendeeIds !== undefined ? { attendeeIds } : {}) } : mp));
+      setMealPlans((prev) => prev.map((mp) => mp.id === mealId ? { ...mp, recipeIds, status, restaurantName, restaurantUrl, ...(attendeeIds !== undefined ? { attendeeIds } : {}) } : mp));
       return;
     }
     const existing = mealPlans.find((mp) => mp.id === mealId);
     if (!existing || !activeFamily?.id) return;
     try {
       const sb = await getSupabase();
-      await upsertMealSlot(sb, activeFamily.id, currentUser.id, existing.date, existing.type, recipeIds, status, attendeeIds);
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, existing.date, existing.type, recipeIds, status, attendeeIds, restaurantName, restaurantUrl);
       setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
     } catch { showToast("Erreur lors de la mise à jour du repas", "clay"); }
   };
@@ -793,21 +795,26 @@ const App = () => {
     if (isSlotEmpty(sourceMeal)) return;
     const destMeal = familyMealPlans.find((mp) => mp.date === destDateStr && mp.type === destType);
 
-    const sourceData = { recipeIds: sourceMeal.recipeIds || [], status: sourceMeal.status || "normal", attendeeIds: sourceMeal.attendeeIds };
+    const sourceData = {
+      recipeIds: sourceMeal.recipeIds || [], status: sourceMeal.status || "normal", attendeeIds: sourceMeal.attendeeIds,
+      restaurantName: sourceMeal.restaurantName, restaurantUrl: sourceMeal.restaurantUrl,
+    };
     const destData = isSlotEmpty(destMeal)
-      ? { recipeIds: [], status: "normal", attendeeIds: undefined }
-      : { recipeIds: destMeal.recipeIds || [], status: destMeal.status || "normal", attendeeIds: destMeal.attendeeIds };
+      ? { recipeIds: [], status: "normal", attendeeIds: [], restaurantName: null, restaurantUrl: null }
+      : {
+          recipeIds: destMeal.recipeIds || [], status: destMeal.status || "normal", attendeeIds: destMeal.attendeeIds,
+          restaurantName: destMeal.restaurantName, restaurantUrl: destMeal.restaurantUrl,
+        };
 
     if (isDemo) {
       setMealPlans((prev) => {
         let next = prev.map((mp) => {
-          if (mp.id === sourceMeal.id) return { ...mp, recipeIds: destData.recipeIds, status: destData.status, ...(destData.attendeeIds !== undefined ? { attendeeIds: destData.attendeeIds } : {}) };
-          if (destMeal && mp.id === destMeal.id) return { ...mp, recipeIds: sourceData.recipeIds, status: sourceData.status, ...(sourceData.attendeeIds !== undefined ? { attendeeIds: sourceData.attendeeIds } : {}) };
+          if (mp.id === sourceMeal.id) return { ...mp, recipeIds: destData.recipeIds, status: destData.status, attendeeIds: destData.attendeeIds, restaurantName: destData.restaurantName, restaurantUrl: destData.restaurantUrl };
+          if (destMeal && mp.id === destMeal.id) return { ...mp, recipeIds: sourceData.recipeIds, status: sourceData.status, attendeeIds: sourceData.attendeeIds, restaurantName: sourceData.restaurantName, restaurantUrl: sourceData.restaurantUrl };
           return mp;
         });
         if (!destMeal) {
-          const resolvedAttendeeIds = sourceData.attendeeIds ?? (activeFamily?.members || []).map((m: any) => m.memberId || m.userId).filter(Boolean);
-          next = [...next, { id: `mv-${Date.now()}`, date: destDateStr, type: destType, recipeIds: sourceData.recipeIds, status: sourceData.status, attendeeIds: resolvedAttendeeIds, familyId: activeFamily?.id }];
+          next = [...next, { id: `mv-${Date.now()}`, date: destDateStr, type: destType, recipeIds: sourceData.recipeIds, status: sourceData.status, attendeeIds: sourceData.attendeeIds, restaurantName: sourceData.restaurantName, restaurantUrl: sourceData.restaurantUrl, familyId: activeFamily?.id }];
         }
         return next;
       });
@@ -817,8 +824,8 @@ const App = () => {
     if (!activeFamily?.id) return;
     try {
       const sb = await getSupabase();
-      await upsertMealSlot(sb, activeFamily.id, currentUser.id, destDateStr, destType, sourceData.recipeIds, sourceData.status, sourceData.attendeeIds);
-      await upsertMealSlot(sb, activeFamily.id, currentUser.id, sourceDateStr, sourceType, destData.recipeIds, destData.status, destData.attendeeIds);
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, destDateStr, destType, sourceData.recipeIds, sourceData.status, sourceData.attendeeIds, sourceData.restaurantName, sourceData.restaurantUrl);
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, sourceDateStr, sourceType, destData.recipeIds, destData.status, destData.attendeeIds, destData.restaurantName, destData.restaurantUrl);
       setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
     } catch { showToast("Erreur lors du déplacement du repas", "clay"); }
   };

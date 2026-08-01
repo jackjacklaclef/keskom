@@ -92,6 +92,8 @@ export const Icon = ({ name, size = 16 }) => {
     clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></>,
     globe: <><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.8 2.5 4.2 5.8 4.2 9s-1.4 6.5-4.2 9c-2.8-2.5-4.2-5.8-4.2-9S9.2 5.5 12 3Z"/></>,
     camera: <><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></>,
+    // Épingle de localisation — lien vers un lieu (Google Maps)
+    "map-pin": <><path d="M12 21s-7-6.5-7-11.5a7 7 0 1 1 14 0C19 14.5 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.3"/></>,
   };
   return (
     <svg {...common} aria-hidden="true" style={{ flexShrink: 0 }}>

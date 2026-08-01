@@ -218,7 +218,7 @@ export const fetchMealPlansForFamily = async (familyId: string): Promise<any[]> 
   if (!sb) return [];
   const { data, error } = await sb
     .from("meal_plans")
-    .select("id, date, meal_plan_meals(id, meal_type, status, meal_plan_meal_attendees(member_id), meal_plan_meal_recipes(recipe_id, order_index))")
+    .select("id, date, meal_plan_meals(id, meal_type, status, restaurant_name, restaurant_url, meal_plan_meal_attendees(member_id), meal_plan_meal_recipes(recipe_id, order_index))")
     .eq("family_id", familyId);
   if (error || !data) return [];
 
@@ -230,6 +230,8 @@ export const fetchMealPlansForFamily = async (familyId: string): Promise<any[]> 
         date: mp.date,
         type: meal.meal_type,
         status: meal.status,
+        restaurantName: meal.restaurant_name,
+        restaurantUrl: meal.restaurant_url,
         attendeeIds: (meal.meal_plan_meal_attendees || []).map((a: any) => String(a.member_id)),
         recipeIds: (meal.meal_plan_meal_recipes || [])
           .sort((a: any, b: any) => a.order_index - b.order_index)
@@ -244,9 +246,13 @@ export const fetchMealPlansForFamily = async (familyId: string): Promise<any[]> 
 // Crée/à jour le créneau (date, type) d'une famille avec sa liste de recettes.
 // attendeeIds: member_id des convives réellement présents (undefined = ne pas toucher
 // la sélection existante en mise à jour ; sur un nouveau créneau, toute la famille par défaut).
+// restaurantName/restaurantUrl : lieu et lien (ex. Google Maps) du restaurant, pertinents
+// seulement quand status === "restaurant" ; toujours écrits tels quels (pas de undefined = ne
+// pas toucher, contrairement à attendeeIds — un repas qui repasse à "normal" doit les vider).
 export const upsertMealSlot = async (
   sb: any, familyId: string, userId: string,
-  date: string, type: string, recipeIds: string[], status: string, attendeeIds?: string[]
+  date: string, type: string, recipeIds: string[], status: string, attendeeIds?: string[],
+  restaurantName: string | null = null, restaurantUrl: string | null = null
 ) => {
   let { data: mp } = await sb.from("meal_plans").select("id").eq("family_id", familyId).eq("date", date).maybeSingle();
   if (!mp) {
@@ -259,11 +265,11 @@ export const upsertMealSlot = async (
   const isNewMeal = !meal;
   if (!meal) {
     const { data: newMeal, error } = await sb
-      .from("meal_plan_meals").insert({ meal_plan_id: mp.id, meal_type: type, status, updated_by: userId }).select("id").single();
+      .from("meal_plan_meals").insert({ meal_plan_id: mp.id, meal_type: type, status, updated_by: userId, restaurant_name: restaurantName, restaurant_url: restaurantUrl }).select("id").single();
     if (error) throw new Error(error.message);
     meal = newMeal;
   } else {
-    await sb.from("meal_plan_meals").update({ status, updated_by: userId }).eq("id", meal.id);
+    await sb.from("meal_plan_meals").update({ status, updated_by: userId, restaurant_name: restaurantName, restaurant_url: restaurantUrl }).eq("id", meal.id);
   }
 
   if (attendeeIds !== undefined) {

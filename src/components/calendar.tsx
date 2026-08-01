@@ -472,20 +472,20 @@ export const DayPanel = ({
     return (meal.recipeIds || []).map((id) => recipes.find((r) => r.id === id)?.name).filter(Boolean);
   };
 
-  const handleSaveSlot = (recipeIds, attendeeIds) => {
+  const handleSaveSlot = (recipeIds, attendeeIds, restaurantName, restaurantUrl) => {
     const type = editingSlot.type;
     const meal = getMeal(type);
-    if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds);
-    else onAddMeal({ date: dateStr, type, recipeIds, status: "normal", attendeeIds });
+    if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds, restaurantName, restaurantUrl);
+    else onAddMeal({ date: dateStr, type, recipeIds, status: "normal", attendeeIds, restaurantName, restaurantUrl });
     setEditingSlot(null);
     setFlashedSlot(type); setTimeout(() => setFlashedSlot(null), 650);
   };
 
-  const handleSaveStatus = (status, recipeIds, attendeeIds) => {
+  const handleSaveStatus = (status, recipeIds, attendeeIds, restaurantName, restaurantUrl) => {
     const type = editingSlot.type;
     const meal = getMeal(type);
-    if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds);
-    else onAddMeal({ date: dateStr, type, recipeIds, status, attendeeIds });
+    if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds, restaurantName, restaurantUrl);
+    else onAddMeal({ date: dateStr, type, recipeIds, status, attendeeIds, restaurantName, restaurantUrl });
     setEditingSlot(null);
     setFlashedSlot(type); setTimeout(() => setFlashedSlot(null), 650);
   };
@@ -576,7 +576,13 @@ export const DayPanel = ({
                 {status === "restaurant" && (
                   <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "var(--amber)" }}>
                     <Icon name="restaurant" size={12} />
-                    <span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span>
+                    <span className="mp-small" style={{ fontWeight: 600 }}>{meal?.restaurantName || "Restaurant"}</span>
+                    {meal?.restaurantUrl && (
+                      <a href={meal.restaurantUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                        title="Ouvrir dans Google Maps" style={{ display: "flex", color: "var(--amber)" }}>
+                        <Icon name="map-pin" size={12} />
+                      </a>
+                    )}
                   </div>
                 )}
                 {status === "skip" && (
@@ -1159,7 +1165,13 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                           {status === "restaurant" && (
                             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}>
                               <Icon name="restaurant" size={13} />
-                              <span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span>
+                              <span className="mp-small" style={{ fontWeight: 600 }}>{meal?.restaurantName || "Restaurant"}</span>
+                              {meal?.restaurantUrl && (
+                                <a href={meal.restaurantUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                                  title="Ouvrir dans Google Maps" style={{ display: "flex", color: "var(--amber)" }}>
+                                  <Icon name="map-pin" size={13} />
+                                </a>
+                              )}
                             </div>
                           )}
                           {status === "skip" && (
@@ -1242,16 +1254,16 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                 recentRecipeIds={recentRecipeIds}
                 familyMembers={familyMembers}
                 onClose={() => setWeekEditingSlot(null)}
-                onSave={(recipeIds, attendeeIds) => {
+                onSave={(recipeIds, attendeeIds, restaurantName, restaurantUrl) => {
                   const meal = mealPlans.find((mp) => mp.date === weekEditingSlot.dateStr && mp.type === weekEditingSlot.type);
-                  if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds);
-                  else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeIds });
+                  if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds, restaurantName, restaurantUrl);
+                  else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeIds, restaurantName, restaurantUrl });
                   setWeekEditingSlot(null);
                 }}
-                onSaveStatus={(status, recipeIds, attendeeIds) => {
+                onSaveStatus={(status, recipeIds, attendeeIds, restaurantName, restaurantUrl) => {
                   const meal = mealPlans.find((mp) => mp.date === weekEditingSlot.dateStr && mp.type === weekEditingSlot.type);
-                  if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds);
-                  else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeIds });
+                  if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds, restaurantName, restaurantUrl);
+                  else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeIds, restaurantName, restaurantUrl });
                   setWeekEditingSlot(null);
                 }}
               />
@@ -1382,7 +1394,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                             <DragHandle dateStr={dateStr} type={type.id} meta={{ label: dragLabel, dotColor }}
                               onDown={handlePointerDown} onMove={handlePointerMove} onUp={handlePointerUp} onCancel={handlePointerCancel} />
                           )}
-                          {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
+                          {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>{meal?.restaurantName || "Restaurant"}</span>{meal?.restaurantUrl && (<a href={meal.restaurantUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Ouvrir dans Google Maps" style={{ display: "flex", color: "var(--amber)" }}><Icon name="map-pin" size={13} /></a>)}</div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
                           {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /></div>{(conflicts.length > 0 || (meal?.recipeIds?.length || 0) >= 2) && (<div className="mp-meal-alerts" style={{ marginTop: "0.25rem" }}><AllergyWarningBadge conflicts={conflicts} compact onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel: fullDayLabel }); }} />{(meal?.recipeIds?.length || 0) >= 2 && (<PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />)}</div>)}<AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
                         </button>
@@ -1398,8 +1410,8 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
               <RecipeSelectionModal recipes={recipes} meal={weekEditingSlot.mealId ? mealPlans.find((mp) => mp.id === weekEditingSlot.mealId) : null}
                 mealType={weekEditingSlot.type} date={weekEditingSlot.dateStr} recentRecipeIds={recentRecipeIds} familyMembers={familyMembers}
                 onClose={() => setWeekEditingSlot(null)}
-                onSave={(recipeIds, attendeeIds) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeIds }); setWeekEditingSlot(null); }}
-                onSaveStatus={(status, recipeIds, attendeeIds) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeIds }); setWeekEditingSlot(null); }}
+                onSave={(recipeIds, attendeeIds, restaurantName, restaurantUrl) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds, restaurantName, restaurantUrl); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeIds, restaurantName, restaurantUrl }); setWeekEditingSlot(null); }}
+                onSaveStatus={(status, recipeIds, attendeeIds, restaurantName, restaurantUrl) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds, restaurantName, restaurantUrl); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeIds, restaurantName, restaurantUrl }); setWeekEditingSlot(null); }}
               />
             )}
           </div>
@@ -1575,7 +1587,8 @@ export const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave, fami
         recentRecipeIds={recentRecipeIds}
         familyMembers={familyMembers}
         onClose={onClose}
-        onSave={(recipeIds, attendeeIds) => { onSave({ date, type: mealType, recipeIds, attendeeIds }); onClose(); }}
+        onSave={(recipeIds, attendeeIds, restaurantName, restaurantUrl) => { onSave({ date, type: mealType, recipeIds, status: "normal", attendeeIds, restaurantName, restaurantUrl }); onClose(); }}
+        onSaveStatus={(status, recipeIds, attendeeIds, restaurantName, restaurantUrl) => { onSave({ date, type: mealType, recipeIds, status, attendeeIds, restaurantName, restaurantUrl }); onClose(); }}
       />
     );
   }

@@ -11,6 +11,8 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
   const [search, setSearch] = useState("");
   const allMemberIds = useMemo(() => familyMembers.filter((m) => m.memberId).map((m) => m.memberId), [familyMembers]);
   const [attendeeIds, setAttendeeIds] = useState(meal?.attendeeIds ?? allMemberIds);
+  const [restaurantName, setRestaurantName] = useState(meal?.restaurantName || "");
+  const [restaurantUrl, setRestaurantUrl] = useState(meal?.restaurantUrl || "");
   const typeLabel = MEAL_TYPES.find((t) => t.id === mealType)?.label || mealType;
 
   const toggle = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -19,10 +21,12 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
   const toggleAllAttendees = () => setAttendeeIds(allAttending ? [] : allMemberIds);
 
   const handleSave = () => {
-    if (status !== "normal") {
-      onSaveStatus(status, [], attendeeIds);
+    if (status === "restaurant") {
+      onSaveStatus(status, [], attendeeIds, restaurantName.trim() || null, restaurantUrl.trim() || null);
+    } else if (status !== "normal") {
+      onSaveStatus(status, [], attendeeIds, null, null);
     } else {
-      onSave(selected, attendeeIds);
+      onSave(selected, attendeeIds, null, null);
     }
   };
 
@@ -98,12 +102,27 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
         </button>
       </div>
 
-      {/* Convives réellement présents (pour allergies, goûts et quantités) */}
+      {/* Lieu du restaurant — visible uniquement pour le statut Restaurant */}
+      {status === "restaurant" && (
+        <div style={{ marginBottom: "0.9rem", paddingBottom: "0.9rem", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <input className="mp-input" style={{ fontSize: "0.85rem" }}
+            value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)}
+            placeholder="Nom du restaurant (optionnel)" />
+          <div style={{ position: "relative" }}>
+            <span style={{ position: "absolute", left: "0.5rem", top: "50%", transform: "translateY(-50%)", color: "var(--ink-faint)", display: "flex" }}>
+              <Icon name="map-pin" size={13} />
+            </span>
+            <input className="mp-input" style={{ paddingLeft: "1.8rem", fontSize: "0.85rem" }}
+              value={restaurantUrl} onChange={(e) => setRestaurantUrl(e.target.value)}
+              placeholder="Lien Google Maps (optionnel)" />
+          </div>
+        </div>
+      )}
+
+      {/* Convives réellement présents (pour allergies, goûts et quantités) — éditable quel que
+          soit le statut : un repas au restaurant ou "pas de repas" concerne quand même des gens. */}
       {familyMembers.length > 0 && (
-        <div style={{
-          marginBottom: "0.9rem", paddingBottom: "0.9rem", borderBottom: "1px solid var(--line)",
-          opacity: status !== "normal" ? 0.4 : 1, pointerEvents: status !== "normal" ? "none" : "auto",
-        }}>
+        <div style={{ marginBottom: "0.9rem", paddingBottom: "0.9rem", borderBottom: "1px solid var(--line)" }}>
           <span className="mp-small" style={{ fontWeight: 600, display: "block" }}>Convives présents</span>
           <span className="mp-micro mp-text-faint" style={{ display: "block", marginBottom: "0.5rem" }}>Pour les allergies, goûts et quantités</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
