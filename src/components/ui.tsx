@@ -90,6 +90,7 @@ export const Icon = ({ name, size = 16 }) => {
     // ---- Icônes générales suite ----
     sunrise: <><path d="M12 2v3M4.22 6.22l2.12 2.12M2 14h3M19 14h3M17.66 8.34l2.12-2.12"/><path d="M5.5 17a6.5 6.5 0 0 1 13 0"/><line x1="2" y1="21" x2="22" y2="21"/></>,
     clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></>,
+    globe: <><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.8 2.5 4.2 5.8 4.2 9s-1.4 6.5-4.2 9c-2.8-2.5-4.2-5.8-4.2-9S9.2 5.5 12 3Z"/></>,
     camera: <><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></>,
   };
   return (

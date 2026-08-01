@@ -459,6 +459,51 @@ plus simple et plus sûr à maintenir que des upserts fins.
 - **Icônes de catégorie manquantes dans la modale de recette** — voir bug corrigé n°12
   ci-dessus (repéré en creusant la demande précédente : le sélecteur de `RecipeModal`
   affichait le nom brut de l'icône en texte plutôt que l'icône elle-même).
+- **Refonte éditoriale du catalogue de recettes globales** (demande explicite : « une
+  vraie source d'inspiration », avec étapes/durées, en gardant les recettes accessibles
+  au plus grand nombre) — **scope volontairement limité aux 55 recettes `scope=global`**,
+  décision validée avec l'utilisateur : les 12 recettes `family` et les 2 `private`
+  appartiennent à de vrais comptes et n'ont pas été touchées. État constaté avant
+  correction : les 49 recettes non-chinoises (id 5-53, présentes depuis avant la
+  migration Supabase) n'avaient **aucune étape** en base et des listes d'ingrédients
+  très pauvres (4-5 items, souvent sans sel/poivre), avec plusieurs erreurs de fond —
+  ex. carbonara au saumon+lait sans œuf ni lardon, houmous aux lentilles au lieu de
+  pois chiches, guacamole sans avocat, riz cantonais à la sauce tomate, tajine
+  d'agneau à la saucisse, quiche lorraine sans œuf. Les 6 recettes chinoises (id 68-73,
+  seedées lors d'une session précédente) avaient déjà des étapes détaillées et n'ont eu
+  besoin que des nouveaux champs.
+  - **Schéma** : 3 colonnes ajoutées sur `recipes` — `origin_country` (text, libre, pas
+    de référentiel dédié), `prep_minutes`/`cook_minutes` (integer). Décision : durées
+    séparées prépa/cuisson plutôt qu'un total unique, pour affichage plus précis dans la
+    fiche recette.
+  - **Contenu** : chaque recette corrigée/complétée individuellement (ingrédients
+    corrigés ou ajoutés, étapes réécrites avec `timer_seconds`/`temperature_c` quand
+    pertinent, pays d'origine, durées) puis appliquée en base par lots de SQL direct
+    (comme le seed chinois précédent) — généré via un script Node jetable
+    (`scratchpad/generate_sql.mjs` + `recipes_data.mjs`, hors repo) qui mappe les noms
+    d'ingrédients vers leurs IDs et échoue fort si un nom n'existe pas encore, plutôt que
+    d'insérer une ligne cassée. **34 nouveaux ingrédients** ajoutés au catalogue partagé
+    pour permettre ces corrections (farine, levure chimique, œuf déjà présent, avocat,
+    pois chiches, tahini, lardons, pâte brisée, pâte à pizza, bouillons, vin blanc/rouge,
+    agneau, thon, poireau, aubergine, épices courantes...), toutes en ingrédients du
+    quotidien (pas de produit de niche) pour respecter la contrainte d'accessibilité.
+  - **Front** : `fetchRecipesForUser` (`src/lib/dataLayer.ts`) lit et mappe les 3
+    nouveaux champs (`originCountry`/`prepMinutes`/`cookMinutes`) ; les 3 points
+    d'écriture recette (`handleAddRecipe`/`handleEditRecipe`/`handleImportRecipe` dans
+    `src/App.tsx`) les persistent. `RecipeModal` (`src/components/recipes.tsx`) gagne
+    trois champs (pays d'origine en texte libre, prépa/cuisson en minutes) à côté des
+    portions. `RecipeDetailModal` affiche un badge durée totale (icône `clock`, format
+    compact `"1h05"`/`"35 min"` via l'helper `formatDuration`) et un badge pays (icône
+    `globe`, nouvelle icône ajoutée à `src/components/ui.tsx`) à côté du badge portions.
+    `RecipesView` affiche la même info en discret (`mp-micro`) sous les tags, en vue
+    grille et en vue compacte. Le compte démo (jeu de données local dans
+    `src/lib/storage.ts`) n'a pas été touché — champs absents, badges ne s'affichent
+    simplement pas pour ce compte, pas d'erreur.
+  - **Vérifié** : `npm run build`, `npm run typecheck` (aucune régression au-delà du
+    style `any` implicite déjà omniprésent dans ces fichiers, cohérent avec le reste du
+    codebase), `npm run test:rls` (18 checks, tous verts — migration purement additive,
+    aucune policy touchée), advisors sécurité Supabase revérifiés après migration (mêmes
+    warnings pré-existants, rien de nouveau introduit).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

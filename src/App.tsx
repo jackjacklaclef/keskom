@@ -636,6 +636,7 @@ const App = () => {
         name: recipe.name, description: recipe.description || null, portions: recipe.portions || 4, tags: recipe.tags || [],
         scope: activeFamily ? "family" : "private", owner_profile_id: currentUser.id, family_id: activeFamily?.id || null,
         recipe_category_id: categoryMap[recipe.category] || null, created_by: currentUser.id, variant_name: recipe.variantName || null,
+        origin_country: recipe.originCountry || null, prep_minutes: recipe.prepMinutes || null, cook_minutes: recipe.cookMinutes || null,
       }).select("id").single();
       if (error) throw error;
       await saveRecipeIngredients(sb, newRow.id, recipe.ingredients || []);
@@ -661,6 +662,7 @@ const App = () => {
       const { error } = await sb.from("recipes").update({
         name: updated.name, description: updated.description || null, portions: updated.portions || 4,
         tags: updated.tags || [], recipe_category_id: categoryMap[updated.category] || null, variant_name: updated.variantName || null,
+        origin_country: updated.originCountry || null, prep_minutes: updated.prepMinutes || null, cook_minutes: updated.cookMinutes || null,
       }).eq("id", Number(updated.id));
       if (error) throw error;
       await saveRecipeIngredients(sb, Number(updated.id), updated.ingredients || []);
@@ -700,6 +702,7 @@ const App = () => {
         name: recipe.name, description: recipe.description || null, portions: recipe.portions || 4, tags: recipe.tags || [],
         scope: activeFamily ? "family" : "private", owner_profile_id: currentUser.id, family_id: activeFamily?.id || null,
         recipe_category_id: categoryMap[recipe.category] || null, created_by: currentUser.id,
+        origin_country: recipe.originCountry || null, prep_minutes: recipe.prepMinutes || null, cook_minutes: recipe.cookMinutes || null,
       }).select("id").single();
       if (error) throw error;
       await saveRecipeIngredients(sb, newRow.id, recipe.ingredients || []);

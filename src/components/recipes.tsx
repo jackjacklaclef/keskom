@@ -11,11 +11,23 @@ const getIngredientMeta = (ingredients, ingredientId) => {
   return { ingredient, category };
 };
 
+// Durée totale (prépa + cuisson) affichée en format compact ("1h05", "35 min")
+const formatDuration = (prepMinutes, cookMinutes) => {
+  const total = (prepMinutes || 0) + (cookMinutes || 0);
+  if (total <= 0) return null;
+  if (total < 60) return `${total} min`;
+  const h = Math.floor(total / 60), m = total % 60;
+  return m > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`;
+};
+
 export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
   const isVariant = !!(recipe?.parentId);
   const [name, setName] = useState(recipe?.name || "");
   const [category, setCategory] = useState(recipe?.category || "main");
   const [portions, setPortions] = useState(recipe?.portions || 4);
+  const [originCountry, setOriginCountry] = useState(recipe?.originCountry || "");
+  const [prepMinutes, setPrepMinutes] = useState(recipe?.prepMinutes || "");
+  const [cookMinutes, setCookMinutes] = useState(recipe?.cookMinutes || "");
   const [variantName, setVariantName] = useState(recipe?.variantName || "");
   const [description, setDescription] = useState(recipe?.description || "");
   const [showDescription, setShowDescription] = useState(!!(recipe?.description));
@@ -98,7 +110,14 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
 
   const handleSave = () => {
     if (!name.trim()) return;
-    onSave({ id: recipe?.id || Date.now().toString(), name: name.trim(), category, portions, description: description.trim(), ingredients: recipeIngredients, tags, steps, parentId: recipe?.parentId || null, rootId: recipe?.rootId || null, variantName: variantName.trim() || null });
+    onSave({
+      id: recipe?.id || Date.now().toString(), name: name.trim(), category, portions,
+      originCountry: originCountry.trim() || null,
+      prepMinutes: prepMinutes !== "" ? Number(prepMinutes) : null,
+      cookMinutes: cookMinutes !== "" ? Number(cookMinutes) : null,
+      description: description.trim(), ingredients: recipeIngredients, tags, steps,
+      parentId: recipe?.parentId || null, rootId: recipe?.rootId || null, variantName: variantName.trim() || null,
+    });
   };
 
   // Bouton "Ajouter X" discret — utilisé pour les sections optionnelles
@@ -166,6 +185,25 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
           ))}
         </div>
       </Field>
+
+      {/* Pays d'origine + durées */}
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.9rem" }}>
+        <div style={{ flex: 1 }}>
+          <span className="mp-label">Pays d'origine</span>
+          <input className="mp-input" value={originCountry} onChange={(e) => setOriginCountry(e.target.value)}
+            placeholder="Ex : Italie" />
+        </div>
+        <div style={{ width: "6.5rem", flexShrink: 0 }}>
+          <span className="mp-label">Prépa. (min)</span>
+          <input className="mp-input" type="number" min="0" value={prepMinutes}
+            onChange={(e) => setPrepMinutes(e.target.value)} placeholder="15" />
+        </div>
+        <div style={{ width: "6.5rem", flexShrink: 0 }}>
+          <span className="mp-label">Cuisson (min)</span>
+          <input className="mp-input" type="number" min="0" value={cookMinutes}
+            onChange={(e) => setCookMinutes(e.target.value)} placeholder="20" />
+        </div>
+      </div>
 
       {/* Description */}
       {showDescription ? (
@@ -535,10 +573,27 @@ export const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], curren
             <p className="mp-body mp-text-soft" style={{ marginBottom: space.lg, lineHeight: 1.6 }}>{recipe.description}</p>
           )}
 
-          {recipe.portions && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginBottom: space.md, padding: "0.3rem 0.7rem", borderRadius: radius.pill, background: "var(--paper-sunken)", border: "1px solid var(--line)" }}>
-              <Icon name="users" size={14} />
-              <span className="mp-small" style={{ fontWeight: 500 }}>{recipe.portions} portion{recipe.portions > 1 ? "s" : ""}</span>
+          {(recipe.portions || recipe.originCountry || formatDuration(recipe.prepMinutes, recipe.cookMinutes)) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: space.md }}>
+              {recipe.portions && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.7rem", borderRadius: radius.pill, background: "var(--paper-sunken)", border: "1px solid var(--line)" }}>
+                  <Icon name="users" size={14} />
+                  <span className="mp-small" style={{ fontWeight: 500 }}>{recipe.portions} portion{recipe.portions > 1 ? "s" : ""}</span>
+                </div>
+              )}
+              {formatDuration(recipe.prepMinutes, recipe.cookMinutes) && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.7rem", borderRadius: radius.pill, background: "var(--paper-sunken)", border: "1px solid var(--line)" }}
+                  title={`Préparation ${recipe.prepMinutes || 0} min · Cuisson ${recipe.cookMinutes || 0} min`}>
+                  <Icon name="clock" size={14} />
+                  <span className="mp-small" style={{ fontWeight: 500 }}>{formatDuration(recipe.prepMinutes, recipe.cookMinutes)}</span>
+                </div>
+              )}
+              {recipe.originCountry && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.7rem", borderRadius: radius.pill, background: "var(--paper-sunken)", border: "1px solid var(--line)" }}>
+                  <Icon name="globe" size={14} />
+                  <span className="mp-small" style={{ fontWeight: 500 }}>{recipe.originCountry}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -831,12 +886,26 @@ export const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingr
                     {recipe.variantName && <p className="mp-micro mp-text-faint" style={{ marginTop: "0.1rem" }}>{recipe.name}</p>}
                   </div>
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", alignItems: "center" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", alignItems: "center", marginBottom: "0.3rem" }}>
                   {recipe.parentId && <span className="mp-badge mp-badge-sage" style={{ fontSize: "0.58rem" }}>Variante</span>}
                   {cat && <span className="mp-badge" style={{ background: `${cat.hex}18`, color: cat.hex, border: `1px solid ${cat.hex}30`, fontSize: "0.62rem", fontWeight: 600 }}>{cat.label}</span>}
                   {recipe.tags.slice(0, 3).map((tag) => <span key={tag} className="mp-badge mp-badge-clay">{tag}</span>)}
                   {recipe.tags.length > 3 && <span className="mp-badge mp-badge-neutral">+{recipe.tags.length - 3}</span>}
                 </div>
+                {(recipe.originCountry || formatDuration(recipe.prepMinutes, recipe.cookMinutes)) && (
+                  <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+                    {recipe.originCountry && (
+                      <span className="mp-micro mp-text-faint" style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                        <Icon name="globe" size={11} /> {recipe.originCountry}
+                      </span>
+                    )}
+                    {formatDuration(recipe.prepMinutes, recipe.cookMinutes) && (
+                      <span className="mp-micro mp-text-faint" style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                        <Icon name="clock" size={11} /> {formatDuration(recipe.prepMinutes, recipe.cookMinutes)}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -864,6 +933,11 @@ export const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingr
                   <span className="mp-small" style={{ fontWeight: 600 }}>{recipe.variantName || recipe.name}</span>
                   {recipe.variantName && <span className="mp-micro mp-text-faint" style={{ marginLeft: "0.4rem" }}>{recipe.name}</span>}
                 </div>
+                {formatDuration(recipe.prepMinutes, recipe.cookMinutes) && (
+                  <span className="mp-micro mp-text-faint" style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem", flexShrink: 0 }}>
+                    <Icon name="clock" size={11} /> {formatDuration(recipe.prepMinutes, recipe.cookMinutes)}
+                  </span>
+                )}
                 <div style={{ display: "flex", gap: "0.2rem", alignItems: "center", flexShrink: 0 }}>
                   {recipe.parentId && <span className="mp-badge mp-badge-sage" style={{ fontSize: "0.58rem" }}>Variante</span>}
                   {cat && (

@@ -130,6 +130,7 @@ export const fetchRecipesForUser = async (): Promise<any[]> => {
     .from("recipes")
     .select(`
       id, name, description, portions, tags, scope, owner_profile_id, family_id, variant_name,
+      origin_country, prep_minutes, cook_minutes,
       recipe_categories(short_name),
       recipe_ingredients(ingredient_id, quantity_label, order_index, ingredients(name)),
       recipe_family_shares(family_id),
@@ -152,6 +153,9 @@ export const fetchRecipesForUser = async (): Promise<any[]> => {
       name: r.name,
       description: r.description || "",
       portions: r.portions,
+      originCountry: r.origin_country || null,
+      prepMinutes: r.prep_minutes ?? null,
+      cookMinutes: r.cook_minutes ?? null,
       tags: r.tags || [],
       category: r.recipe_categories?.short_name,
       scope: r.scope,
