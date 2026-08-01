@@ -551,6 +551,34 @@ plus simple et plus sûr à maintenir que des upserts fins.
     silencieusement sur le sélecteur de recette (une `<label>`+checkbox, pas un
     `<button>`) avant de conclure à tort à un bug. Créneau de test ajouté puis retiré
     proprement pour ne pas polluer les fixtures RLS.
+- **Consulter le contenu d'une recette depuis une carte de repas** (tour suivant,
+  demande explicite : garder la modification de la composition du créneau, mais
+  ajouter la consultation du contenu de chaque recette) — dans `RecipeNamesList`
+  (`src/components/calendar.tsx`, composant unique partagé par `DayPanel`, vue
+  Semaine et vue Perso), le nom de chaque recette est désormais cliquable
+  (`stopPropagation` indispensable : sans lui, le clic remonte au bouton parent qui
+  ouvre l'éditeur de composition) et ouvre `RecipeDetailModal` en lecture seule.
+  Cliquer ailleurs sur la case garde le comportement existant (éditeur de
+  composition du créneau, choix des recettes/statut/convives).
+  - **`RecipeDetailModal` gagne un prop `readOnly`** (`src/components/recipes.tsx`,
+    défaut `false`) plutôt que de dupliquer le composant : masque la barre d'onglets
+    Variantes/Partager et le bouton « Modifier » en bas de modale, garde tout le
+    reste (photo, portions/durée/origine, ingrédients, étapes, bouton **Mode
+    cuisine** — volontairement conservé, très utile consulté depuis le planning).
+    Décision : ne pas câbler `onEdit`/`onCreateVariant`/`onShareRecipe` depuis le
+    calendrier plutôt que de dupliquer toute la chaîne de handlers recette
+    (`handleEditRecipe`, `handleCreateVariant`, `handleShareRecipe`) jusque-là —
+    hors scope de la demande (« consulter », pas « éditer la recette » depuis cet
+    écran), et sans le prop `readOnly` un bouton « Créer ma variante » sans
+    `onCreateVariant` aurait planté au clic.
+  - `DayPanel` et `CalendarView` gèrent chacun leur propre état
+    `detailRecipe`/`setDetailRecipe` (instances indépendantes, pas de state
+    partagé) ; seul `ingredients` (déjà présent dans les deux) est nécessaire pour
+    le mode lecture seule — pas besoin de faire remonter `currentUser`/
+    `userFamilies`/`activeFamily` jusqu'au calendrier pour cette fonctionnalité.
+  - Vérifié avec le même compte de test réel + scripts Puppeteer jetables : clic sur
+    le nom → fiche sans bouton Modifier ni onglet Variantes ; clic ailleurs sur la
+    case → éditeur de composition inchangé ; créneau de test nettoyé après coup.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
