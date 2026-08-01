@@ -531,6 +531,26 @@ plus simple et plus sûr à maintenir que des upserts fins.
     validé : soit étendre aux 50 autres recettes globales, soit ajouter un vrai champ
     d'upload dans `RecipeModal` (auquel cas le bucket Storage + policy authenticated
     deviendra pertinent, sur le même modèle que `recipe-step-photos`).
+  - **Photo de plat étendue aux cartes du planning** (tour suivant, demande explicite
+    après confirmation que l'échantillon fonctionnait) — `RecipeNamesList`
+    (`src/components/calendar.tsx`, seul composant partagé entre `DayPanel`, la vue
+    Semaine et la vue Perso) affiche désormais une miniature ronde (0.9rem, bordure de
+    la couleur de catégorie) à la place de l'icône de catégorie quand
+    `recipe.photoUrl` existe, juste avant le nom du plat. Un seul point de code
+    modifié suffit à couvrir les 3 vues grâce à ce composant déjà mutualisé.
+  - **Diagnostic « je ne vois pas les photos »** — repéré après coup que le premier
+    signalement de l'utilisateur venait d'un cache navigateur/PWA (service worker
+    `registerType: 'autoUpdate'`, onglet resté ouvert sur l'ancien bundle) : un hard
+    refresh a suffi, aucune régression réelle. Bon réflexe pour la prochaine fois
+    qu'un changement front semble ne pas s'appliquer en prod malgré un déploiement
+    confirmé (`git log`/`origin/main` à jour).
+  - **Méthode de vérification** : re-confirmé à chaque étape avec un vrai compte
+    (`rls-test-a@keskom-test.local`, scripts Puppeteer jetables hors repo, même
+    méthode que pour les captures d'onboarding) plutôt que de se fier au seul
+    `npm run build` — a permis de repérer que le premier script de test échouait
+    silencieusement sur le sélecteur de recette (une `<label>`+checkbox, pas un
+    `<button>`) avant de conclure à tort à un bug. Créneau de test ajouté puis retiré
+    proprement pour ne pas polluer les fixtures RLS.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

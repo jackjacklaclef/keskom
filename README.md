@@ -12,7 +12,8 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
 - **Planning** — calendrier semaine/jour, un ou plusieurs repas par créneau, statut
   (prévu / à faire / fait), duplication d'une semaine sur une autre. Glisser-déposer
   pour déplacer un repas d'un jour/créneau à un autre (échange automatique si la case
-  de destination n'est pas vide).
+  de destination n'est pas vide). Miniature de la recette affichée à côté de son nom
+  quand une photo existe.
 - **Présence par repas** — choisir qui participe à chaque repas (tags, avec un raccourci
   « Tout le monde ») ; sert au calcul des quantités de la liste de courses. Une alerte
   s'affiche sur la carte de repas si un présent est allergique à un ingrédient d'une
