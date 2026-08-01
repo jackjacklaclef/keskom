@@ -504,6 +504,33 @@ plus simple et plus sûr à maintenir que des upserts fins.
     codebase), `npm run test:rls` (18 checks, tous verts — migration purement additive,
     aucune policy touchée), advisors sécurité Supabase revérifiés après migration (mêmes
     warnings pré-existants, rien de nouveau introduit).
+  - **Photo de plat — échantillon sur 5 recettes** (tour suivant, demande explicite) :
+    2 colonnes ajoutées, `photo_url` et `photo_attribution` (text) sur `recipes`.
+    **Décision notable** : la première tentative visait à héberger les photos dans un
+    nouveau bucket Storage `recipe-photos`, ce qui aurait nécessité une policy
+    d'upload temporaire ouverte au rôle `anon` (aucune clé service-role disponible
+    dans cette session pour bypasser RLS à l'upload) — **bloquée par le
+    classificateur de sécurité d'auto mode** (à raison : c'est exactement le genre de
+    policy `WITH CHECK (true)` déjà repéré comme trop permissif par l'advisor sur
+    `ingredients`). Confirmé avec l'utilisateur : plutôt que de forcer cette
+    permission, **`photo_url` pointe directement vers Wikimedia Commons** (images
+    sous licence Creative Commons, CDN stable) — aucun bucket, aucune policy Storage
+    à toucher. `photo_attribution` conserve la mention légale (auteur + licence)
+    exigée par les licences CC BY/BY-SA, affichée sous la photo.
+    Recettes choisies pour la diversité des cuisines : Pâtes carbonara (5), Bœuf
+    bourguignon (8), Tarte aux pommes (33), Guacamole (39), Poulet Kung Pao (73).
+    Affichage : `RecipeDetailModal` (bandeau photo en haut, marge négative sur le
+    padding du modal pour un rendu bord-à-bord, attribution en légende), grille de
+    `RecipesView` (vignette en haut de chaque `mp-recipe-card`, même technique de
+    marge négative sur `.mp-card`), vue compacte (miniature 1.8rem carrée à la place
+    de l'icône de catégorie quand une photo existe). Aucune UI d'upload ajoutée
+    (hors scope de l'échantillon) — `handleAddRecipe`/`handleEditRecipe` ne
+    persistent pas encore `photoUrl`/`photoAttribution`, mais comme Supabase
+    `.update()` ne touche que les colonnes passées explicitement, éditer une de ces
+    5 recettes ne fait pas disparaître sa photo. À reprendre si l'échantillon est
+    validé : soit étendre aux 50 autres recettes globales, soit ajouter un vrai champ
+    d'upload dans `RecipeModal` (auquel cas le bucket Storage + policy authenticated
+    deviendra pertinent, sur le même modèle que `recipe-step-photos`).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
