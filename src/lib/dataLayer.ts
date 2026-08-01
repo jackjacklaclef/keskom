@@ -134,7 +134,7 @@ export const fetchRecipesForUser = async (): Promise<any[]> => {
       recipe_categories(short_name),
       recipe_ingredients(ingredient_id, quantity_label, order_index, ingredients(name)),
       recipe_family_shares(family_id),
-      recipe_steps(id, order_index, title, body, timer_seconds, media_url)
+      recipe_steps(id, order_index, title, body, timer_seconds, media_url, phase)
     `)
     .order("name");
   if (error || !rows) return [];
@@ -172,7 +172,7 @@ export const fetchRecipesForUser = async (): Promise<any[]> => {
         .map((ri: any) => ({ ingredientId: String(ri.ingredient_id), ingredientName: ri.ingredients?.name, quantity: ri.quantity_label })),
       steps: (r.recipe_steps || [])
         .sort((a: any, b: any) => a.order_index - b.order_index)
-        .map((s: any) => ({ id: String(s.id), title: s.title || "", body: s.body, timerSeconds: s.timer_seconds || null, mediaUrl: s.media_url || null })),
+        .map((s: any) => ({ id: String(s.id), title: s.title || "", body: s.body, timerSeconds: s.timer_seconds || null, mediaUrl: s.media_url || null, phase: s.phase || "cook" })),
     };
   });
 };
@@ -207,6 +207,7 @@ export const saveRecipeSteps = async (sb: any, recipeId: number, steps: any[]) =
       body: s.body.trim(),
       timer_seconds: s.timerSeconds || null,
       media_url: s.mediaUrl || null,
+      phase: s.phase === "prep" ? "prep" : "cook",
     }));
   if (rows.length > 0) await sb.from("recipe_steps").insert(rows);
 };

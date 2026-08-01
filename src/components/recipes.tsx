@@ -41,6 +41,7 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
   const [stepTitleInput, setStepTitleInput] = useState("");
   const [stepBodyInput, setStepBodyInput] = useState("");
   const [stepMinutesInput, setStepMinutesInput] = useState("");
+  const [stepPhaseInput, setStepPhaseInput] = useState("cook");
   const [stepPhotoUrl, setStepPhotoUrl] = useState(null);
   const [uploadingStepPhoto, setUploadingStepPhoto] = useState(false);
   const [pickerCategory, setPickerCategory] = useState("legumes");
@@ -96,10 +97,12 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
       body: stepBodyInput.trim(),
       timerSeconds: minutes > 0 ? Math.round(minutes * 60) : null,
       mediaUrl: stepPhotoUrl,
+      phase: stepPhaseInput,
     }]);
     setStepTitleInput(""); setStepBodyInput(""); setStepMinutesInput(""); setStepPhotoUrl(null);
   };
   const removeStep = (idx) => setSteps((prev) => prev.filter((_, i) => i !== idx));
+  const toggleStepPhase = (idx) => setSteps((prev) => prev.map((s, i) => i === idx ? { ...s, phase: s.phase === "prep" ? "cook" : "prep" } : s));
   const moveStep = (idx, dir) => setSteps((prev) => {
     const target = idx + dir;
     if (target < 0 || target >= prev.length) return prev;
@@ -337,11 +340,19 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {step.title && <p className="mp-small" style={{ fontWeight: 600, marginBottom: "0.15rem" }}>{step.title}</p>}
                     <p className="mp-small mp-text-soft" style={{ whiteSpace: "pre-wrap" }}>{step.body}</p>
-                    {step.timerSeconds > 0 && (
-                      <span className="mp-micro mp-text-faint" style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem", marginTop: "0.2rem" }}>
-                        <Icon name="clock" size={11} /> {Math.round(step.timerSeconds / 60)} min
-                      </span>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem", flexWrap: "wrap" }}>
+                      <button type="button" onClick={() => toggleStepPhase(idx)}
+                        title="Cliquer pour changer la phase"
+                        className={`mp-badge ${step.phase === "prep" ? "mp-badge-sage" : "mp-badge-clay"}`}
+                        style={{ border: "none", cursor: "pointer", fontSize: "0.6rem" }}>
+                        {step.phase === "prep" ? "Préparation" : "Cuisson"}
+                      </button>
+                      {step.timerSeconds > 0 && (
+                        <span className="mp-micro mp-text-faint" style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                          <Icon name="clock" size={11} /> {Math.round(step.timerSeconds / 60)} min
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem", flexShrink: 0 }}>
                     <button type="button" onClick={() => moveStep(idx, -1)} disabled={idx === 0}
@@ -368,6 +379,14 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
             <textarea className="mp-textarea" style={{ minHeight: "2.2rem", fontSize: "0.82rem" }} value={stepBodyInput}
               onChange={(e) => setStepBodyInput(e.target.value)} placeholder="Description de l'étape..." />
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: radius.sm, overflow: "hidden" }}>
+                {[["prep", "Préparation"], ["cook", "Cuisson"]].map(([val, label]) => (
+                  <button key={val} type="button" onClick={() => setStepPhaseInput(val)}
+                    style={{ padding: "0.3rem 0.55rem", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.72rem", fontWeight: stepPhaseInput === val ? 700 : 400, background: stepPhaseInput === val ? "var(--clay)" : "transparent", color: stepPhaseInput === val ? "#fff" : "var(--ink-soft)" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                 <Icon name="clock" size={13} />
                 <input className="mp-input" type="number" min="0" step="0.5" style={{ width: "3.6rem", fontSize: "0.8rem" }}
