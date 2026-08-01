@@ -151,9 +151,11 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
     les objets par URL sans passer par RLS, une policy `SELECT` n'aurait fait qu'exposer
     le *listing* complet du bucket (repéré et supprimé via l'advisor de sécurité).
 - `ingredients` / `ingredient_categories` / `recipe_categories` / `units` — référentiels,
-  lecture publique. `ingredients` a des policies INSERT/DELETE ouvertes à tout
-  authentifié (catalogue partagé, pas de notion de propriétaire — comme avant la
-  migration, en local).
+  lecture publique. `ingredients` a des policies INSERT/DELETE censées être ouvertes à
+  tout authentifié (catalogue partagé, pas de notion de propriétaire — comme avant la
+  migration, en local) — **mais l'INSERT est en réalité bloqué en pratique, voir bug
+  connu ci-dessous : le GRANT SQL sur la table semble manquant, indépendamment de la
+  policy RLS.**
 - `meal_plans` (un par famille+date) → `meal_plan_meals` (un par type de repas ce
   jour-là, avec `status`) → `meal_plan_meal_recipes` (recettes du repas) +
   `meal_plan_meal_attendees` (membres présents à ce repas — `member_id`, remplacement
@@ -266,6 +268,17 @@ plus simple et plus sûr à maintenir que des upserts fins.
   reprendre avec `familyAllergies` (voir plus bas) le jour où quelqu'un veut que
   « Suggérer » respecte vraiment les allergies ; le volet dislikes resterait lui à
   faire (pas d'équivalent `get_family_dislikes` pour l'instant).
+- **INSERT sur `ingredients` refusé pour un utilisateur authentifié normal**, malgré la
+  policy censée l'autoriser (voir section Schéma Supabase ci-dessus) — repéré en testant
+  l'accès en écriture avant un chantier de refonte du catalogue de recettes. Erreur
+  exacte : `permission denied for table ingredients`, avec le hint Postgres
+  `GRANT INSERT ON public.ingredients TO authenticated`. Ça ressemble à un GRANT SQL
+  manquant sur la table elle-même (indépendant de la policy RLS — en RLS+Postgres il
+  faut les deux : le GRANT au niveau table ET une policy qui laisse passer la ligne).
+  Concrètement, `handleAddIngredient` (`src/App.tsx`, écran Ingrédients) échoue pour
+  n'importe quel compte réel aujourd'hui. Pas corrigé — nécessite une migration
+  (`GRANT INSERT ON public.ingredients TO authenticated;`), donc un accès DB en
+  écriture (MCP Supabase ou clé service-role), non disponible au moment du repérage.
 
 ## Fonctionnalités ajoutées pendant la migration
 
