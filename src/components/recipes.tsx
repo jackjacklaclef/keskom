@@ -499,7 +499,7 @@ export const CookModeModal = ({ recipe, onClose }) => {
 };
 
 // Fiche détaillée d'une recette
-export const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], currentUser, userFamilies = [], activeFamily, onClose, onEdit, onCreateVariant, onShareRecipe }) => {
+export const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], currentUser, userFamilies = [], activeFamily, onClose, onEdit, onCreateVariant, onShareRecipe, readOnly = false }) => {
   const [tab, setTab] = useState("recipe"); // "recipe" | "variants"
   const [showCookMode, setShowCookMode] = useState(false);
   const cat = RECIPE_CATEGORIES.find((c) => c.id === recipe.category);
@@ -557,8 +557,8 @@ export const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], curren
         </button>
       </div>
 
-      {/* Onglets — Recette / Variantes */}
-      {(variants.length > 0 || recipe.scope !== "global") && (
+      {/* Onglets — Recette / Variantes (masqués en consultation depuis le planning) */}
+      {!readOnly && (variants.length > 0 || recipe.scope !== "global") && (
         <div style={{ display: "flex", gap: "0.3rem", marginBottom: space.md, borderBottom: "1px solid var(--line)", paddingBottom: "0.6rem" }}>
           <button type="button" onClick={() => setTab("recipe")}
             style={{ padding: "0.3rem 0.65rem", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", fontWeight: tab === "recipe" ? 700 : 400, color: tab === "recipe" ? "var(--clay)" : "var(--ink-soft)", borderBottom: tab === "recipe" ? "2px solid var(--clay)" : "2px solid transparent", marginBottom: "-0.6rem" }}>
@@ -743,7 +743,7 @@ export const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], curren
       {/* Actions bas de modale */}
       <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginTop: space.xl, paddingTop: space.lg, borderTop: "1px solid var(--line)", flexWrap: "wrap" }}>
         <button type="button" className="mp-btn mp-btn-secondary" onClick={onClose}>Fermer</button>
-        {isOwner && tab === "recipe" && (
+        {!readOnly && isOwner && tab === "recipe" && (
           <button type="button" className="mp-btn mp-btn-primary" onClick={onEdit}>
             <Icon name="edit" size={14} /> Modifier
           </button>

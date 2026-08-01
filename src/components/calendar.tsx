@@ -6,6 +6,7 @@ import { MEAL_TYPES, DAYS_OF_WEEK, MONTHS, RECIPE_CATEGORIES } from "../constant
 import { todayStr, getMondayOf } from "../lib/dateUtils";
 import { Icon, Modal, ModalHeader, Field, CategoryIcon } from "./ui";
 import { RecipeSelectionModal } from "./recipeSelection";
+import { RecipeDetailModal } from "./recipes";
 
 // Conflits allergène pour un repas : recoupe les ingrédients des recettes assignées
 // avec les allergies des présents (familyAllergies: { [memberId]: [{type, id}] }).
@@ -57,8 +58,11 @@ const AllergyWarningBadge = ({ conflicts }) => {
 };
 
 // Noms des recettes d'un créneau, chacun précédé de l'icône de sa catégorie — repère le
-// type de plat (entrée/plat/dessert...) sans avoir à lire le texte.
-const RecipeNamesList = ({ recipeIds, recipes }) => {
+// type de plat (entrée/plat/dessert...) sans avoir à lire le texte. Chaque nom est
+// cliquable pour consulter la recette (ingrédients/étapes) sans ouvrir l'éditeur de
+// composition du créneau — stopPropagation indispensable, la carte parente ouvre
+// sinon la modale de sélection de recette au clic.
+const RecipeNamesList = ({ recipeIds, recipes, onSelectRecipe }) => {
   const items = (recipeIds || []).map((id) => recipes.find((r) => r.id === id)).filter(Boolean);
   if (items.length === 0) return null;
   return (
@@ -68,7 +72,10 @@ const RecipeNamesList = ({ recipeIds, recipes }) => {
         return (
           <React.Fragment key={r.id}>
             {i > 0 && ", "}
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+            <span
+              onClick={onSelectRecipe ? (e) => { e.stopPropagation(); onSelectRecipe(r); } : undefined}
+              title={onSelectRecipe ? "Voir la recette" : undefined}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem", cursor: onSelectRecipe ? "pointer" : "inherit", textDecoration: onSelectRecipe ? "underline" : "none", textDecorationColor: "var(--line)", textUnderlineOffset: "2px" }}>
               {r.photoUrl ? (
                 <img src={r.photoUrl} alt="" style={{ width: "0.9rem", height: "0.9rem", borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: cat ? `1.5px solid ${cat.hex}` : "1.5px solid var(--line)" }} />
               ) : cat && (
@@ -309,6 +316,7 @@ export const DayPanel = ({
   const [showTemplates, setShowTemplates] = useState(false);
   const [showDuplicate, setShowDuplicate] = useState(false);
   const [flashedSlot, setFlashedSlot] = useState(null);
+  const [detailRecipe, setDetailRecipe] = useState(null); // consultation d'une recette du créneau, indépendante de l'édition
 
   const visibleTypes = MEAL_TYPES.filter((t) => t.id !== "breakfast" || showBreakfast);
   const getMeal = (type) => mealPlans.find((mp) => mp.date === dateStr && mp.type === type);
@@ -434,7 +442,7 @@ export const DayPanel = ({
                     ? <span className="mp-small mp-text-faint">+ Ajouter</span>
                     : <>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                          <span style={{ paddingRight: "1.4rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} /></span>
+                          <span style={{ paddingRight: "1.4rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /></span>
                           <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
                         </div>
                         <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
@@ -475,6 +483,10 @@ export const DayPanel = ({
         <DuplicateWeekModal dateStr={dateStr} mealPlans={mealPlans} onClose={() => setShowDuplicate(false)}
           onDuplicate={(srcDateStr, targetMondayStr) => { onDuplicateWeek(srcDateStr, targetMondayStr); setShowDuplicate(false); }} />
       )}
+
+      {detailRecipe && (
+        <RecipeDetailModal recipe={detailRecipe} ingredients={ingredients} onClose={() => setDetailRecipe(null)} readOnly />
+      )}
     </div>
   );
 };
@@ -501,6 +513,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [weekEditingSlot, setWeekEditingSlot] = useState(null);
+  const [detailRecipe, setDetailRecipe] = useState(null); // consultation d'une recette du créneau, indépendante de l'édition
   const [weekActionType, setWeekActionType] = useState(null);
   const [weekActionDate, setWeekActionDate] = useState(null);
   const [weekActionTemplate, setWeekActionTemplate] = useState(null);
@@ -976,7 +989,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                               ? <span className="mp-small mp-text-faint">+ Ajouter</span>
                               : <>
                                   <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                                    <RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} />
+                                    <RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} />
                                     <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
                                   </div>
                                   <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
@@ -1177,7 +1190,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                           )}
                           {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
-                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} /><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} /></div><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
+                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} /></div><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
                         </button>
                       );
                     })}
@@ -1317,6 +1330,10 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
             })}
           </div>
         </>
+      )}
+
+      {detailRecipe && (
+        <RecipeDetailModal recipe={detailRecipe} ingredients={ingredients} onClose={() => setDetailRecipe(null)} readOnly />
       )}
     </div>
   );
