@@ -15,7 +15,10 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
   de destination n'est pas vide). Miniature de la recette affichée à côté de son nom
   quand une photo existe ; cliquer sur le nom d'une recette ouvre sa fiche
   (ingrédients, étapes, mode cuisine) sans quitter le planning, cliquer ailleurs sur
-  la case reste dédié à la modification du repas.
+  la case reste dédié à la modification du repas. Pour un repas à plusieurs recettes,
+  un bouton dédié ouvre un **plan de préparation** qui regroupe les étapes de tous les
+  plats en deux phases (préparation sans feu, puis cuisson) pour aider à tout
+  préparer/cuisiner en parallèle.
 - **Présence par repas** — choisir qui participe à chaque repas (tags, avec un raccourci
   « Tout le monde ») ; sert au calcul des quantités de la liste de courses. Une alerte
   s'affiche sur la carte de repas si un présent est allergique à un ingrédient d'une

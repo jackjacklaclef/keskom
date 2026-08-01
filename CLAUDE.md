@@ -579,6 +579,49 @@ plus simple et plus sûr à maintenir que des upserts fins.
   - Vérifié avec le même compte de test réel + scripts Puppeteer jetables : clic sur
     le nom → fiche sans bouton Modifier ni onglet Variantes ; clic ailleurs sur la
     case → éditeur de composition inchangé ; créneau de test nettoyé après coup.
+- **Plan de préparation (parallélisation des repas à plusieurs recettes)** (tour
+  suivant, demande explicite : garder l'édition de la composition du repas, mais
+  guider la parallélisation des préparations quand plusieurs plats sont prévus au
+  même créneau). Décisions validées avec l'utilisateur avant implémentation (3
+  questions posées) : tag de phase explicite par étape plutôt qu'une heuristique par
+  mots-clés (plus fiable, mais chantier de contenu presque aussi long que la refonte
+  du catalogue) ; déclenchement uniquement sur les repas à **≥ 2 recettes** (c'est là
+  que la parallélisation a un intérêt) ; nouveau bouton dédié sur la carte de repas
+  plutôt qu'une extension du Mode cuisine existant.
+  - **Schéma** : colonne `phase` sur `recipe_steps` (`text not null default 'cook'`,
+    `check (phase in ('prep','cook'))`). Règle de tag utilisée pour les 55 recettes
+    globales (~273 étapes retaguées une par une, pas d'heuristique) : `prep` = tout ce
+    qui ne demande pas de feu (découpe, sauces froides, pâtes/appareils crus,
+    marinade, préchauffage du four — volontairement classé `prep` : ça se lance en
+    parallèle du reste de la mise en place) ; `cook` = dès que le feu/four est utilisé,
+    ou qu'une étape dépend d'un résultat déjà cuit (y compris assemblage final et
+    service). Script de génération jetable (`scratchpad/generate_phase_sql.mjs` +
+    `phases_data.mjs`, hors repo), avec une passe de validation (compte des étapes
+    par recette vs longueur du tableau de phases) avant application en base — a évité
+    d'insérer des phases mal alignées sur le mauvais `order_index`.
+  - **Éditeur de recette** (`RecipeModal`, `src/components/recipes.tsx`) : bascule
+    Préparation/Cuisson ajoutée au formulaire d'ajout d'étape (`stepPhaseInput`,
+    défaut `"cook"` pour matcher le défaut SQL) et badge cliquable sur chaque étape
+    déjà ajoutée (`toggleStepPhase`) — nécessaire pour que les recettes créées par de
+    vrais utilisateurs profitent aussi du plan de préparation, pas seulement les 55
+    recettes globales retaguées manuellement.
+  - **Front** : `fetchRecipesForUser`/`saveRecipeSteps` (`src/lib/dataLayer.ts`)
+    lisent/écrivent `phase` (défaut `"cook"` si absent, jamais `null`/`undefined` côté
+    app). Nouveau composant `MealPrepPlanModal` (`src/components/calendar.tsx`,
+    local au fichier, pas exporté) : regroupe les étapes de **toutes** les recettes
+    d'un même créneau par phase, puis par recette dans chaque phase (pas de fusion à
+    plat entre recettes — on ne connaît pas leurs dépendances, mélanger l'ordre
+    aurait été trompeur). Bouton d'ouverture (icône `list`, déjà existante) affiché
+    dans `RecipeNamesList` uniquement si `(meal.recipeIds||[]).length >= 2`, avec
+    `stopPropagation` (même contrainte que le clic sur le nom d'une recette : sans
+    ça, remonte au bouton parent qui ouvre l'éditeur de composition). `DayPanel` et
+    `CalendarView` gèrent chacun leur propre state `prepPlanMeal` (même pattern que
+    `detailRecipe`, instances indépendantes).
+  - Vérifié avec le compte de test réel : 2 recettes planifiées sur un même créneau
+    (Pâtes carbonara + Bœuf bourguignon), plan de préparation ouvert et contrôlé
+    visuellement — carbonara apparaît dans les deux phases (a une étape sans feu),
+    bourguignon uniquement en Cuisson (aucune étape `prep` taguée pour cette
+    recette, cohérent avec son contenu). Créneau de test nettoyé après coup.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
