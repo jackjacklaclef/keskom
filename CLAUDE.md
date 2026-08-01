@@ -242,6 +242,24 @@ plus simple et plus sûr à maintenir que des upserts fins.
     introduction, alors que les données étaient correctes en base — seul le compte
     démo (chemin de calcul différent, direct depuis `currentUser.allergies`)
     fonctionnait, ce qui a masqué le problème jusqu'ici. Dépendance ajoutée, corrigé.
+14. **Vue Mois : dates décalées d'un jour pour tout fuseau en avance sur UTC**
+    (`calendarWeeks` dans `src/components/calendar.tsx`) — repéré en vérifiant
+    l'affichage du bloc d'alertes dans `DayPanel` : le repas plannifié sur un jour
+    donné (confirmé présent en base et visible en vue Semaine) apparaissait comme
+    vide en vue Mois pour ce même jour. Cause : `anchor = new Date(year, month, 1)`
+    est construit à minuit local (00:00:00, aucune heure précisée) ; sa conversion
+    `.toISOString().split("T")[0]` bascule alors sur la veille pour tout fuseau en
+    avance sur UTC (Europe, Asie, Australie...), décalant silencieusement toutes les
+    `dateStr` dérivées de cet ancrage — donc tout le mois affiché. Le reste du code
+    évitait déjà ce piège en ancrant explicitement à midi (`customDays`,
+    `getMondayOf`, `dateOfSlot` dans `src/lib/dateUtils.ts`, ce dernier avec le
+    commentaire « immunisé contre tout décalage timezone ») — seule `calendarWeeks`
+    l'avait raté, et seulement pour sa branche `viewMode === "month"` (la branche
+    semaine/perso restait accidentellement correcte : elle réutilise l'heure courante
+    de `currentDate`, hors de la fenêtre à risque sauf tout près de minuit local).
+    Corrigé en ancrant les deux branches à midi (`new Date(..., 12)`), plutôt que de
+    ne patcher que la branche mois — évite de laisser la branche semaine/perso
+    « correcte par chance » selon l'heure de la journée.
 
 ## Bugs connus, non corrigés
 
@@ -695,6 +713,22 @@ plus simple et plus sûr à maintenir que des upserts fins.
     ingrédients étaient toutes correctes, seul `familyAllergies` arrivait vide dans
     `getMealAllergyConflicts`, ce qui a permis de remonter jusqu'au `useMemo` en
     quelques minutes plutôt que de suspecter à tort la RLS ou le RPC.
+- **Regroupement des boutons Allergie / Plan de prépa** (tour suivant, demande
+  explicite : même bloc, en ligne sur web, en colonne sur mobile) — nouvelle classe
+  CSS globale `.mp-meal-alerts` (`src/theme.tsx`, avec les autres règles responsive
+  de la vue semaine, même breakpoint 768px) : `flex-direction: row` par défaut,
+  `column` en dessous de 768px. Les deux boutons (`AllergyWarningBadge`,
+  `PrepPlanButton`) perdent leurs `alignSelf`/`marginTop` individuels (pensés à
+  l'origine pour des blocs séparés) au profit du conteneur commun, qui n'est rendu
+  que si au moins un des deux a quelque chose à montrer. Câblé dans les 3 vues.
+  Vérifié aux deux tailles (desktop 1280px et mobile 390px, viewport iPhone) avec le
+  compte de test réel : bouton en ligne sur desktop, empilés en colonne sur mobile,
+  dans `DayPanel` et la vue Semaine.
+  - **Vérification mobile plus large demandée** (« vérifie la disposition de
+    l'affichage du planning sur mobile ») : les 3 vues (Semaine/Mois/Perso) contrôlées
+    à 390×844 — rien de cassé, seul un détail préexistant mineur repéré (le nom d'une
+    recette peut se couper avant la virgule séparant deux plats dans
+    `RecipeNamesList`), non corrigé car hors scope de la demande.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

@@ -545,6 +545,23 @@ export const GlobalStyle = () => (
       .mp-week-meal-label-full { display: inline; }
       .mp-week-meal-label-short { display: none; }
     }
+    /* ---- Boutons d'alerte sur la carte de repas (Plan de prépa / Allergie) ----
+       En ligne sur desktop (assez de largeur pour les deux libellés côte à côte),
+       en colonne sur mobile (cases de planning trop étroites pour les deux pastilles
+       côte à côte sans wrap moche). */
+    .mp-meal-alerts {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 0.3rem;
+    }
+    @media (max-width: 768px) {
+      .mp-meal-alerts {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
     /* ---- Stepper recette ---- */
     .mp-stepper {
       display: flex;

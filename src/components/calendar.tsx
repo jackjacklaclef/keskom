@@ -51,8 +51,8 @@ const AllergyWarningBadge = ({ conflicts, onClick, compact = false }) => {
   return (
     <button type="button" onClick={onClick} title="Voir le détail de l'alerte allergie"
       style={{
-        display: "inline-flex", alignItems: "center", gap: "0.25rem", alignSelf: "flex-start",
-        marginTop: compact ? 0 : "0.3rem", padding: compact ? "0.1rem 0.35rem" : "0.15rem 0.45rem",
+        display: "inline-flex", alignItems: "center", gap: "0.25rem",
+        padding: compact ? "0.1rem 0.35rem" : "0.15rem 0.45rem",
         borderRadius: radius.pill, border: "1px solid var(--berry)", background: "var(--berry-wash)",
         color: "var(--berry)", fontFamily: "inherit", fontSize: compact ? "0.58rem" : "0.62rem", fontWeight: 700,
         cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap",
@@ -337,8 +337,8 @@ export const AttendeeAvatarStack = ({ attendeeIds, familyMembers = [], max = 4 }
 const PrepPlanButton = ({ onClick, compact = false }) => (
   <button type="button" onClick={onClick} title="Voir le plan de préparation de ce repas"
     style={{
-      display: "inline-flex", alignItems: "center", gap: "0.25rem", alignSelf: "flex-start",
-      marginTop: "0.3rem", padding: compact ? "0.1rem 0.35rem" : "0.15rem 0.45rem",
+      display: "inline-flex", alignItems: "center", gap: "0.25rem",
+      padding: compact ? "0.1rem 0.35rem" : "0.15rem 0.45rem",
       borderRadius: radius.pill, border: "1px solid var(--clay-soft)", background: "var(--clay-wash)",
       color: "var(--clay)", fontFamily: "inherit", fontSize: compact ? "0.58rem" : "0.62rem", fontWeight: 700,
       cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap",
@@ -591,11 +591,15 @@ export const DayPanel = ({
                     : <>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
                           <span style={{ paddingRight: "1.4rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /></span>
-                          <AllergyWarningBadge conflicts={conflicts}
-                            onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel }); }} />
                         </div>
-                        {(meal?.recipeIds?.length || 0) >= 2 && (
-                          <PrepPlanButton onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />
+                        {(conflicts.length > 0 || (meal?.recipeIds?.length || 0) >= 2) && (
+                          <div className="mp-meal-alerts" style={{ marginTop: "0.3rem" }}>
+                            <AllergyWarningBadge conflicts={conflicts}
+                              onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel }); }} />
+                            {(meal?.recipeIds?.length || 0) >= 2 && (
+                              <PrepPlanButton onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />
+                            )}
+                          </div>
                         )}
                         <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
                       </>
@@ -801,7 +805,13 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const weeksToShow = viewMode === "month" ? 6 : 1;
-    const anchor = viewMode === "month" ? new Date(year, month, 1) : new Date(currentDate);
+    // Ancrage à midi local, comme customDays/getMondayOf/dateOfSlot — sans ça,
+    // `new Date(year, month, 1)` est à minuit local, et son .toISOString() bascule
+    // sur le jour précédent pour tout fuseau en avance sur UTC (Europe, Asie...),
+    // décalant silencieusement toutes les dates de la vue Mois d'un jour.
+    const anchor = viewMode === "month"
+      ? new Date(year, month, 1, 12)
+      : new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 12);
     const dow = anchor.getDay();
     const start = new Date(anchor);
     start.setDate(anchor.getDate() - dow + (dow === 0 ? -6 : 1));
@@ -1164,11 +1174,15 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                               : <>
                                   <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                                     <RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} />
-                                    <AllergyWarningBadge conflicts={conflicts} compact
-                                      onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel: fullDayLabel }); }} />
                                   </div>
-                                  {(meal?.recipeIds?.length || 0) >= 2 && (
-                                    <PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />
+                                  {(conflicts.length > 0 || (meal?.recipeIds?.length || 0) >= 2) && (
+                                    <div className="mp-meal-alerts" style={{ marginTop: "0.25rem" }}>
+                                      <AllergyWarningBadge conflicts={conflicts} compact
+                                        onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel: fullDayLabel }); }} />
+                                      {(meal?.recipeIds?.length || 0) >= 2 && (
+                                        <PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />
+                                      )}
+                                    </div>
                                   )}
                                   <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
                                 </>
@@ -1370,7 +1384,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                           )}
                           {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
-                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /><AllergyWarningBadge conflicts={conflicts} compact onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel: fullDayLabel }); }} /></div>{(meal?.recipeIds?.length || 0) >= 2 && (<PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />)}<AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
+                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /></div>{(conflicts.length > 0 || (meal?.recipeIds?.length || 0) >= 2) && (<div className="mp-meal-alerts" style={{ marginTop: "0.25rem" }}><AllergyWarningBadge conflicts={conflicts} compact onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel: fullDayLabel }); }} />{(meal?.recipeIds?.length || 0) >= 2 && (<PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />)}</div>)}<AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
                         </button>
                       );
                     })}
