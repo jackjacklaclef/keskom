@@ -528,6 +528,17 @@ export const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], curren
 
   return (
     <Modal onClose={onClose} width="480px">
+      {/* Photo du plat — étirée jusqu'aux bords du modal (marge négative = padding du modal) */}
+      {recipe.photoUrl && (
+        <div style={{ margin: "-1.5rem -1.5rem 1rem" }}>
+          <img src={recipe.photoUrl} alt={recipe.name}
+            style={{ width: "100%", height: "13rem", objectFit: "cover", display: "block", borderRadius: `${radius.lg} ${radius.lg} 0 0` }} />
+          {recipe.photoAttribution && (
+            <p className="mp-micro mp-text-faint" style={{ textAlign: "right", padding: "0.2rem 0.9rem 0" }}>{recipe.photoAttribution}</p>
+          )}
+        </div>
+      )}
+
       {/* En-tête */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: space.md }}>
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
@@ -862,6 +873,10 @@ export const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingr
               <div key={recipe.id} className="mp-card mp-recipe-card"
                 onClick={() => setDetailRecipe(recipe)} role="button" tabIndex={0}
                 onKeyDown={(e) => e.key === "Enter" && setDetailRecipe(recipe)}>
+                {recipe.photoUrl && (
+                  <img src={recipe.photoUrl} alt={recipe.name}
+                    style={{ margin: "-1.1rem -1.1rem 0.6rem", width: "calc(100% + 2.2rem)", height: "7rem", objectFit: "cover", display: "block", borderRadius: `${radius.lg} ${radius.lg} 0 0` }} />
+                )}
                 <div className="mp-recipe-card-actions" onClick={(e) => e.stopPropagation()}>
                   {recipeTab === "global" ? (
                     <button type="button" className="mp-btn mp-btn-sm"
@@ -928,7 +943,11 @@ export const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingr
                 style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.5rem 0.4rem", borderBottom: "1px solid var(--line)", cursor: "pointer" }}
                 onMouseEnter={(e) => e.currentTarget.style.background = "var(--paper-sunken)"}
                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                <span style={{ fontSize: "1.1rem", lineHeight: 1, flexShrink: 0, width: "1.4rem", textAlign: "center" }}>{cat ? <CategoryIcon icon={cat.icon} size={16} color={cat.hex} /> : <Icon name="cat-other" size={16} />}</span>
+                {recipe.photoUrl ? (
+                  <img src={recipe.photoUrl} alt={recipe.name} style={{ width: "1.8rem", height: "1.8rem", borderRadius: radius.sm, objectFit: "cover", flexShrink: 0 }} />
+                ) : (
+                  <span style={{ fontSize: "1.1rem", lineHeight: 1, flexShrink: 0, width: "1.4rem", textAlign: "center" }}>{cat ? <CategoryIcon icon={cat.icon} size={16} color={cat.hex} /> : <Icon name="cat-other" size={16} />}</span>
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span className="mp-small" style={{ fontWeight: 600 }}>{recipe.variantName || recipe.name}</span>
                   {recipe.variantName && <span className="mp-micro mp-text-faint" style={{ marginLeft: "0.4rem" }}>{recipe.name}</span>}
