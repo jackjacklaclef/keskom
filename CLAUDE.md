@@ -232,6 +232,16 @@ plus simple et plus sûr à maintenir que des upserts fins.
     `RECIPE_CATEGORIES` dans ce même fichier (liste des recettes, filtres, fiche détail...)
     utilisaient déjà correctement `<CategoryIcon icon={cat.icon} size={N} color={cat.hex} />`
     — seul ce sélecteur avait été oublié. Corrigé par simple remplacement, même pattern.
+13. **`familyAllergies` figé à `{}` pour tout compte réel** (`src/App.tsx`) — repéré en
+    travaillant sur le bouton d'alerte allergie : le `useMemo` qui expose
+    `familyAllergies` n'avait pas `realFamilyAllergies` dans son tableau de
+    dépendances, donc React ne recalculait jamais la valeur après la résolution du
+    fetch initial (`fetchFamilyAllergies`/RPC `get_family_allergies`, qui fonctionnait
+    correctement). Conséquence : l'alerte allergie sur la carte de repas (triangle,
+    puis bouton) ne s'est **jamais affichée pour un compte réel** depuis son
+    introduction, alors que les données étaient correctes en base — seul le compte
+    démo (chemin de calcul différent, direct depuis `currentUser.allergies`)
+    fonctionnait, ce qui a masqué le problème jusqu'ici. Dépendance ajoutée, corrigé.
 
 ## Bugs connus, non corrigés
 
@@ -654,6 +664,37 @@ plus simple et plus sûr à maintenir que des upserts fins.
     Vérifié avec le compte de test réel : les 55 cartes de la Base commune chargent
     bien leur image (0 lien cassé), capture pleine page de la grille contrôlée
     visuellement.
+- **Alerte allergie transformée en bouton explicite avec modale de détail** (tour
+  suivant, demande explicite : même esprit que le bouton Plan de prépa, mais pour
+  l'alerte allergie — un plat/ingrédient/personnes concernées plutôt qu'un simple
+  survol). `AllergyWarningBadge` (`src/components/calendar.tsx`) n'est plus un
+  `<span>` passif avec `title` natif : c'est désormais un vrai bouton pastille berry
+  (« ⚠ Allergie(s) », variante `compact`), qui ouvre `AllergyAlertModal` — les
+  conflits (déjà calculés par `getMealAllergyConflicts`, inchangé) sont regroupés par
+  recette puis par ingrédient, avec la liste des personnes concernées par ingrédient
+  (dédupliquée). Câblé dans les 3 vues (`DayPanel`/Semaine/Perso) avec le même state
+  `allergyAlert` par instance de composant (même pattern que `detailRecipe`/
+  `prepPlanMeal`) et le même `stopPropagation()` nécessaire pour ne pas rouvrir
+  l'éditeur de composition du créneau.
+  - **Bug pré-existant découvert et corrigé en testant** (indépendant de ce chantier,
+    présent depuis l'ajout de la fonctionnalité allergie elle-même) : `familyAllergies`
+    (`src/App.tsx`) restait figé à `{}` après le chargement initial pour **tout compte
+    réel** — le `useMemo` qui le calcule n'avait pas `realFamilyAllergies` dans son
+    tableau de dépendances, donc React ne recalculait jamais la valeur après la
+    résolution du fetch (`fetchFamilyAllergies`/RPC `get_family_allergies`), qui lui
+    fonctionnait très bien. Résultat concret : le triangle d'alerte allergie sur la
+    carte de repas ne s'est **jamais affiché pour un compte réel** depuis son
+    introduction, malgré des données correctes en base — seul le compte démo (qui ne
+    passe pas par ce `useMemo`, `familyAllergies` recalculé directement depuis
+    `currentUser.allergies`) fonctionnait, ce qui a longtemps masqué le problème.
+    Dépendance ajoutée, comportement confirmé avec le compte de test réel (allergie
+    fixture au poulet + recette « Poulet rôti aux herbes » + convive présent → badge
+    et modale corrects).
+  - Repéré via un `console.log` temporaire (retiré après diagnostic, pas laissé dans
+    le code) plutôt qu'en devinant — les valeurs de `recipeIds`/`attendeeIds`/
+    ingrédients étaient toutes correctes, seul `familyAllergies` arrivait vide dans
+    `getMealAllergyConflicts`, ce qui a permis de remonter jusqu'au `useMemo` en
+    quelques minutes plutôt que de suspecter à tort la RLS ou le RPC.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

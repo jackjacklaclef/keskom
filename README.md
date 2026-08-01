@@ -20,9 +20,9 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
   plats en deux phases (préparation sans feu, puis cuisson) pour aider à tout
   préparer/cuisiner en parallèle.
 - **Présence par repas** — choisir qui participe à chaque repas (tags, avec un raccourci
-  « Tout le monde ») ; sert au calcul des quantités de la liste de courses. Une alerte
-  s'affiche sur la carte de repas si un présent est allergique à un ingrédient d'une
-  recette assignée.
+  « Tout le monde ») ; sert au calcul des quantités de la liste de courses. Un bouton
+  d'alerte s'affiche sur la carte de repas si un présent est allergique à un ingrédient
+  d'une recette assignée, et ouvre le détail (plat, ingrédient, personne concernée).
 - **Recettes** — catalogue partagé (recettes globales) + recettes privées ou partagées
   au sein d'une famille, variantes d'une recette existante, étapes numérotées avec
   minuteur et photo, mode « Cuisine » pas-à-pas. Pays d'origine et temps de

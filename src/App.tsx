@@ -249,7 +249,7 @@ const App = () => {
     const selfMember = activeFamily?.members.find((m: any) => m.userId === currentUser?.id);
     if (!selfMember || !currentUser?.allergies?.length) return {};
     return { [selfMember.memberId]: currentUser.allergies };
-  }, [isDemo, activeFamily, currentUser]);
+  }, [isDemo, activeFamily, currentUser, realFamilyAllergies]);
 
   // ── Synchronisation temps réel du planning (Realtime) — comptes non-démo ──
   // Si un autre membre de la famille modifie le planning, on le voit sans recharger.

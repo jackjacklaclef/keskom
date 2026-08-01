@@ -42,18 +42,70 @@ const getMealAllergyConflicts = (meal, recipes, ingredients, familyAllergies, fa
   return conflicts;
 };
 
-// Petit triangle d'alerte, visible sur la carte de repas si un présent est allergique
-// à un ingrédient d'une recette assignée. Détail au survol (title natif, pas de nouveau
-// composant tooltip pour rester simple).
-const AllergyWarningBadge = ({ conflicts }) => {
+// Bouton d'alerte allergie — remplace l'ancien triangle muet (détail au survol
+// seulement, peu visible/inaccessible au tactile) par un déclencheur explicite, même
+// esprit que PrepPlanButton mais en berry pour signaler la sévérité. Ouvre
+// AllergyAlertModal avec le détail plats/ingrédients/personnes.
+const AllergyWarningBadge = ({ conflicts, onClick, compact = false }) => {
   if (!conflicts || conflicts.length === 0) return null;
-  const title = conflicts
-    .map((c) => `${c.memberName} est allergique à ${c.ingredientName} (${c.recipeName})`)
-    .join("\n");
   return (
-    <span title={title} style={{ display: "inline-flex", alignItems: "center", color: "var(--berry)", flexShrink: 0 }}>
-      <Icon name="alert-triangle" size={13} />
-    </span>
+    <button type="button" onClick={onClick} title="Voir le détail de l'alerte allergie"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: "0.25rem", alignSelf: "flex-start",
+        marginTop: compact ? 0 : "0.3rem", padding: compact ? "0.1rem 0.35rem" : "0.15rem 0.45rem",
+        borderRadius: radius.pill, border: "1px solid var(--berry)", background: "var(--berry-wash)",
+        color: "var(--berry)", fontFamily: "inherit", fontSize: compact ? "0.58rem" : "0.62rem", fontWeight: 700,
+        cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap",
+      }}>
+      <Icon name="alert-triangle" size={compact ? 10 : 11} /> Allergie{conflicts.length > 1 ? `s (${conflicts.length})` : ""}
+    </button>
+  );
+};
+
+// Détail d'une alerte allergie — regroupe les conflits par recette (plat), puis liste
+// l'ingrédient en cause et la ou les personnes concernées, pour répondre exactement à
+// « quel plat, quel ingrédient, qui » sans avoir à deviner depuis un simple survol.
+const AllergyAlertModal = ({ conflicts, mealTypeLabel, dayLabel, onClose }) => {
+  const byRecipe = [];
+  conflicts.forEach((c) => {
+    let group = byRecipe.find((g) => g.recipeName === c.recipeName);
+    if (!group) { group = { recipeName: c.recipeName, items: [] }; byRecipe.push(group); }
+    let item = group.items.find((it) => it.ingredientName === c.ingredientName);
+    if (!item) { item = { ingredientName: c.ingredientName, memberNames: [] }; group.items.push(item); }
+    if (!item.memberNames.includes(c.memberName)) item.memberNames.push(c.memberName);
+  });
+
+  return (
+    <Modal onClose={onClose} width="440px">
+      <ModalHeader title="Alerte allergie" onClose={onClose} />
+      <p className="mp-small mp-text-soft" style={{ marginBottom: space.lg }}>
+        {mealTypeLabel} — {dayLabel}
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        {byRecipe.map((group) => (
+          <div key={group.recipeName}>
+            <p className="mp-small" style={{ fontWeight: 700, marginBottom: "0.4rem" }}>{group.recipeName}</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", paddingLeft: "1.1rem" }}>
+              {group.items.map((item) => (
+                <div key={item.ingredientName} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                  <span style={{ color: "var(--berry)", display: "inline-flex", marginTop: "0.15rem", flexShrink: 0 }}>
+                    <Icon name="alert-triangle" size={13} />
+                  </span>
+                  <p className="mp-small">
+                    <strong>{item.ingredientName}</strong> — allergie chez {item.memberNames.join(", ")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: space.xl, paddingTop: space.lg, borderTop: "1px solid var(--line)" }}>
+        <button type="button" className="mp-btn mp-btn-secondary" onClick={onClose}>Fermer</button>
+      </div>
+    </Modal>
   );
 };
 
@@ -411,6 +463,7 @@ export const DayPanel = ({
   const [flashedSlot, setFlashedSlot] = useState(null);
   const [detailRecipe, setDetailRecipe] = useState(null); // consultation d'une recette du créneau, indépendante de l'édition
   const [prepPlanMeal, setPrepPlanMeal] = useState(null); // plan de préparation (≥2 recettes), indépendant de l'édition et de la consultation
+  const [allergyAlert, setAllergyAlert] = useState(null); // détail de l'alerte allergie (plats/ingrédients/personnes), indépendant du reste
 
   const visibleTypes = MEAL_TYPES.filter((t) => t.id !== "breakfast" || showBreakfast);
   const getMeal = (type) => mealPlans.find((mp) => mp.date === dateStr && mp.type === type);
@@ -508,6 +561,7 @@ export const DayPanel = ({
           const borderColor = status === "restaurant" ? "var(--amber)"
             : status === "skip" ? "var(--line)"
             : names.length > 0 ? dotColor : "var(--line)";
+          const conflicts = getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers);
 
           return (
             <div key={type.id} style={{ position: "relative" }}>
@@ -537,7 +591,8 @@ export const DayPanel = ({
                     : <>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
                           <span style={{ paddingRight: "1.4rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /></span>
-                          <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
+                          <AllergyWarningBadge conflicts={conflicts}
+                            onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel }); }} />
                         </div>
                         {(meal?.recipeIds?.length || 0) >= 2 && (
                           <PrepPlanButton onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />
@@ -593,6 +648,15 @@ export const DayPanel = ({
           onClose={() => setPrepPlanMeal(null)}
         />
       )}
+
+      {allergyAlert && (
+        <AllergyAlertModal
+          conflicts={allergyAlert.conflicts}
+          mealTypeLabel={allergyAlert.mealTypeLabel}
+          dayLabel={allergyAlert.dayLabel}
+          onClose={() => setAllergyAlert(null)}
+        />
+      )}
     </div>
   );
 };
@@ -621,6 +685,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
   const [weekEditingSlot, setWeekEditingSlot] = useState(null);
   const [detailRecipe, setDetailRecipe] = useState(null); // consultation d'une recette du créneau, indépendante de l'édition
   const [prepPlanMeal, setPrepPlanMeal] = useState(null); // plan de préparation (≥2 recettes), indépendant de l'édition et de la consultation
+  const [allergyAlert, setAllergyAlert] = useState(null); // détail de l'alerte allergie (plats/ingrédients/personnes), indépendant du reste
   const [weekActionType, setWeekActionType] = useState(null);
   const [weekActionDate, setWeekActionDate] = useState(null);
   const [weekActionTemplate, setWeekActionTemplate] = useState(null);
@@ -1056,6 +1121,8 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                       const isDragOver = dragOverKey === cellKey(dateStr, type.id);
                       const isBeingDragged = dragSource && dragSource.dateStr === dateStr && dragSource.type === type.id;
                       const dragLabel = status === "restaurant" ? "Restaurant" : status === "skip" ? "Pas de repas" : names.join(", ");
+                      const conflicts = getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers);
+                      const fullDayLabel = `${dayLabel} ${date.getDate()} ${MONTHS[date.getMonth()]}`;
 
                       return (
                         <button key={type.id} type="button"
@@ -1097,7 +1164,8 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                               : <>
                                   <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                                     <RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} />
-                                    <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
+                                    <AllergyWarningBadge conflicts={conflicts} compact
+                                      onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel: fullDayLabel }); }} />
                                   </div>
                                   {(meal?.recipeIds?.length || 0) >= 2 && (
                                     <PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />
@@ -1276,6 +1344,8 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                       const isDragOver = !isPast && dragOverKey === cellKey(dateStr, type.id);
                       const isBeingDragged = dragSource && dragSource.dateStr === dateStr && dragSource.type === type.id;
                       const dragLabel = status === "restaurant" ? "Restaurant" : status === "skip" ? "Pas de repas" : names.join(", ");
+                      const conflicts = getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers);
+                      const fullDayLabel = `${dayLabel} ${date.getDate()} ${MONTHS[date.getMonth()]}`;
                       return (
                         <button key={type.id} type="button"
                           data-cell-key={isPast ? undefined : cellKey(dateStr, type.id)}
@@ -1300,7 +1370,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                           )}
                           {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
-                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} /></div>{(meal?.recipeIds?.length || 0) >= 2 && (<PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />)}<AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
+                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /><AllergyWarningBadge conflicts={conflicts} compact onClick={(e) => { e.stopPropagation(); setAllergyAlert({ conflicts, mealTypeLabel: type.label, dayLabel: fullDayLabel }); }} /></div>{(meal?.recipeIds?.length || 0) >= 2 && (<PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />)}<AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
                         </button>
                       );
                     })}
@@ -1459,6 +1529,15 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
           />
         );
       })()}
+
+      {allergyAlert && (
+        <AllergyAlertModal
+          conflicts={allergyAlert.conflicts}
+          mealTypeLabel={allergyAlert.mealTypeLabel}
+          dayLabel={allergyAlert.dayLabel}
+          onClose={() => setAllergyAlert(null)}
+        />
+      )}
     </div>
   );
 };
