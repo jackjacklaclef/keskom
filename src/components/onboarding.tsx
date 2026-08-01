@@ -23,7 +23,7 @@ const STEPS = [
     id: "calendar",
     eyebrow: "Le coeur de la maison",
     title: "Le Calendrier",
-    text: "Tu poses les repas de la semaine, tu dis qui sera là ce soir-là, et toute la famille voit le menu d'un coup d'oeil.",
+    text: "Tu poses les repas de la semaine, tu dis qui sera là ce soir-là, et toute la famille voit le menu d'un coup d'oeil. Plusieurs plats au même repas ? Le bouton « Plan de prépa » te dit quoi préparer d'abord et quoi cuisiner en même temps.",
     image: calendarImg,
   },
   {

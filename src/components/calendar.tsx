@@ -280,6 +280,21 @@ export const AttendeeAvatarStack = ({ attendeeIds, familyMembers = [], max = 4 }
   );
 };
 
+// Bouton d'ouverture du plan de préparation — icône + libellé explicite plutôt qu'une
+// icône nue : sans texte, ce déclencheur passait inaperçu à côté des noms de recettes.
+const PrepPlanButton = ({ onClick, compact = false }) => (
+  <button type="button" onClick={onClick} title="Voir le plan de préparation de ce repas"
+    style={{
+      display: "inline-flex", alignItems: "center", gap: "0.25rem", alignSelf: "flex-start",
+      marginTop: "0.3rem", padding: compact ? "0.1rem 0.35rem" : "0.15rem 0.45rem",
+      borderRadius: radius.pill, border: "1px solid var(--clay-soft)", background: "var(--clay-wash)",
+      color: "var(--clay)", fontFamily: "inherit", fontSize: compact ? "0.58rem" : "0.62rem", fontWeight: 700,
+      cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap",
+    }}>
+    <Icon name="list" size={compact ? 10 : 11} /> Plan de prépa
+  </button>
+);
+
 // Plan de préparation d'un repas à plusieurs recettes — regroupe les étapes de TOUTES
 // les recettes du créneau en 2 phases (préparation sans feu, puis cuisson), pour
 // pouvoir batcher la découpe/les sauces avant d'allumer quoi que ce soit, puis
@@ -523,13 +538,10 @@ export const DayPanel = ({
                         <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
                           <span style={{ paddingRight: "1.4rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /></span>
                           <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
-                          {(meal?.recipeIds?.length || 0) >= 2 && (
-                            <span onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} title="Plan de préparation"
-                              style={{ display: "inline-flex", alignItems: "center", color: "var(--ink-faint)", cursor: "pointer", flexShrink: 0 }}>
-                              <Icon name="list" size={13} />
-                            </span>
-                          )}
                         </div>
+                        {(meal?.recipeIds?.length || 0) >= 2 && (
+                          <PrepPlanButton onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />
+                        )}
                         <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
                       </>
                 )}
@@ -1086,13 +1098,10 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                                   <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                                     <RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} />
                                     <AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />
-                                    {(meal?.recipeIds?.length || 0) >= 2 && (
-                                      <span onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} title="Plan de préparation"
-                                        style={{ display: "inline-flex", alignItems: "center", color: "var(--ink-faint)", cursor: "pointer", flexShrink: 0 }}>
-                                        <Icon name="list" size={12} />
-                                      </span>
-                                    )}
                                   </div>
+                                  {(meal?.recipeIds?.length || 0) >= 2 && (
+                                    <PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />
+                                  )}
                                   <AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} />
                                 </>
                           )}
@@ -1291,7 +1300,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                           )}
                           {status === "restaurant" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--amber)" }}><Icon name="restaurant" size={13} /><span className="mp-small" style={{ fontWeight: 600 }}>Restaurant</span></div>}
                           {status === "skip" && <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--ink-faint)" }}><Icon name="skip" size={13} /><span className="mp-small">Pas de repas</span></div>}
-                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} />{(meal?.recipeIds?.length || 0) >= 2 && (<span onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} title="Plan de préparation" style={{ display: "inline-flex", alignItems: "center", color: "var(--ink-faint)", cursor: "pointer", flexShrink: 0 }}><Icon name="list" size={12} /></span>)}</div><AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
+                          {status === "normal" && (names.length === 0 ? <span className="mp-small mp-text-faint">{isPast ? "—" : "+ Ajouter"}</span> : <><div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><RecipeNamesList recipeIds={meal?.recipeIds} recipes={recipes} onSelectRecipe={setDetailRecipe} /><AllergyWarningBadge conflicts={getMealAllergyConflicts(meal, recipes, ingredients, familyAllergies, familyMembers)} /></div>{(meal?.recipeIds?.length || 0) >= 2 && (<PrepPlanButton compact onClick={(e) => { e.stopPropagation(); setPrepPlanMeal(meal); }} />)}<AttendeeAvatarStack attendeeIds={meal?.attendeeIds} familyMembers={familyMembers} max={3} /></>)}
                         </button>
                       );
                     })}

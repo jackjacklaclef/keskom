@@ -622,6 +622,15 @@ plus simple et plus sûr à maintenir que des upserts fins.
     visuellement — carbonara apparaît dans les deux phases (a une étape sans feu),
     bourguignon uniquement en Cuisson (aucune étape `prep` taguée pour cette
     recette, cohérent avec son contenu). Créneau de test nettoyé après coup.
+  - **Bouton rendu plus explicite** (retour utilisateur : le déclencheur — une icône
+    nue — passait inaperçu) — remplacé par `PrepPlanButton`
+    (`src/components/calendar.tsx`), une pastille avec icône **et** libellé
+    (« Plan de prépa »), sur sa propre ligne sous les noms de recettes plutôt qu'en
+    ligne à côté (variante `compact` pour les cellules plus étroites de Semaine/Perso).
+    Étape « Le Calendrier » de la visite guidée (`src/components/onboarding.tsx`,
+    `STEPS[1].text`) mise à jour pour mentionner explicitement ce bouton — capture
+    d'écran non régénérée (le pipeline est manuel, une simple modification de texte
+    ne le justifiait pas).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
