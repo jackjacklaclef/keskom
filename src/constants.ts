@@ -149,6 +149,7 @@ export const STORAGE_KEYS = {
   registeredUsers: "mealPlanner_registeredUsers",
   families:        "mealPlanner_families",
   onboardingSeen:  "mealPlanner_onboardingSeen",
+  dietSetupSeen:   "mealPlanner_dietSetupSeen",
 };
 
 export const ingredientCategories = [

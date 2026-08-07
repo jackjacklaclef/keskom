@@ -201,6 +201,126 @@ export const IngredientRestrictionPicker = ({ current, ingredients, mode = "alle
 export const AllergyPicker = (props) => <IngredientRestrictionPicker {...props} mode="allergy" current={props.currentAllergies} />;
 
 // ============================================================
+// PRÉFÉRENCES ALIMENTAIRES — proposées une fois à la création du compte
+// ============================================================
+
+// Modale affichée par-dessus l'app principale (même position que OnboardingTour, à sa suite) :
+// une fois par utilisateur, à la première arrivée réelle sur l'app — pas sur le succès de
+// l'inscription elle-même, qui n'obtient quasiment jamais de session immédiate sur ce projet
+// (confirmation par email activée, voir l'effet de déclenchement dans App.tsx). Skippable — les
+// toggles/pickers enregistrent immédiatement via onUpdateUserProfile (même pattern que dans
+// AccountView, pas de brouillon local), donc "Passer" et "Continuer" font la même chose au
+// fond : fermer l'étape. Deux boutons distincts gardés quand même pour que l'intention
+// affichée à l'utilisateur reste honnête (il peut n'avoir rien renseigné).
+export const DietSetupView = ({ currentUser, ingredients, onUpdateUserProfile, onFinish }) => {
+  const [showAllergyPicker, setShowAllergyPicker] = useState(false);
+  const [showDislikePicker, setShowDislikePicker] = useState(false);
+
+  const allergies = currentUser?.allergies || [];
+  const dislikes = currentUser?.dislikes || [];
+  const diets = currentUser?.diets || [];
+
+  const toggleDiet = (id) => {
+    const next = diets.includes(id) ? diets.filter((d) => d !== id) : [...diets, id];
+    onUpdateUserProfile({ diets: next });
+  };
+
+  return (
+    <>
+      <Modal onClose={onFinish} width="480px">
+        <ModalHeader title="Vos préférences alimentaires" onClose={onFinish} />
+        <p className="mp-small mp-text-soft" style={{ marginBottom: "1.25rem" }}>
+          Facultatif, mais ça aide à filtrer les recettes suggérées, adapter la liste de
+          courses et vous alerter en cas d'allergie. Modifiable à tout moment depuis
+          « Mon compte ».
+        </p>
+
+        <div style={{ marginBottom: "1.25rem" }}>
+          <span className="mp-small" style={{ fontWeight: 600, display: "block", marginBottom: "0.5rem" }}>Régime alimentaire</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+            {DIET_OPTIONS.map((diet) => {
+              const active = diets.includes(diet.id);
+              return (
+                <button key={diet.id} type="button" onClick={() => toggleDiet(diet.id)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "0.3rem",
+                    padding: "0.3rem 0.65rem", borderRadius: radius.pill, cursor: "pointer",
+                    fontFamily: "inherit", fontSize: "0.78rem", fontWeight: active ? 600 : 400,
+                    border: `1.5px solid ${active ? "var(--sage)" : "var(--line)"}`,
+                    background: active ? "var(--sage-wash)" : "transparent",
+                    color: active ? "var(--sage)" : "var(--ink-soft)",
+                    transition: "all 100ms",
+                  }}>
+                  <CategoryIcon icon={diet.icon} size={14} color={active ? "var(--sage)" : "var(--ink-soft)"} />
+                  <span>{diet.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: "1.25rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+            <span className="mp-small" style={{ fontWeight: 600 }}>Allergies & intolérances</span>
+            <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => setShowAllergyPicker(true)}>
+              <Icon name="edit" size={13} /> Modifier
+            </button>
+          </div>
+          {allergies.length === 0
+            ? <p className="mp-small mp-text-faint">Aucune allergie renseignée</p>
+            : <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                {allergies.map((a, i) => <AllergyBadge key={i} allergy={a} ingredients={ingredients} />)}
+              </div>}
+        </div>
+
+        <div style={{ marginBottom: "1.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+            <span className="mp-small" style={{ fontWeight: 600 }}>Aliments non appréciés</span>
+            <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => setShowDislikePicker(true)}>
+              <Icon name="edit" size={13} /> Modifier
+            </button>
+          </div>
+          {dislikes.length === 0
+            ? <p className="mp-small mp-text-faint">Aucun aliment renseigné</p>
+            : <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                {dislikes.map((d, i) => <IngredientRestrictionBadge key={i} item={d} ingredients={ingredients} mode="dislike" />)}
+              </div>}
+        </div>
+
+        <div style={{ display: "flex", gap: "0.6rem" }}>
+          <button type="button" className="mp-btn mp-btn-secondary" style={{ flex: 1, justifyContent: "center" }} onClick={onFinish}>
+            Passer
+          </button>
+          <button type="button" className="mp-btn mp-btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={onFinish}>
+            Continuer
+          </button>
+        </div>
+      </Modal>
+
+      {showAllergyPicker && (
+        <IngredientRestrictionPicker
+          mode="allergy"
+          current={allergies}
+          ingredients={ingredients}
+          onClose={() => setShowAllergyPicker(false)}
+          onSave={(v) => onUpdateUserProfile({ allergies: v })}
+        />
+      )}
+
+      {showDislikePicker && (
+        <IngredientRestrictionPicker
+          mode="dislike"
+          current={dislikes}
+          ingredients={ingredients}
+          onClose={() => setShowDislikePicker(false)}
+          onSave={(v) => onUpdateUserProfile({ dislikes: v })}
+        />
+      )}
+    </>
+  );
+};
+
+// ============================================================
 // ACCOUNT VIEW
 // ============================================================
 

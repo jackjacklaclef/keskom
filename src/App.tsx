@@ -11,7 +11,7 @@ import { RecipesView } from "./components/recipes";
 import { ShoppingListView } from "./components/shopping";
 import { PrivacyView } from "./components/privacy";
 import { FamilySetupView, LoginView, RegisterView, ForgotPasswordView } from "./components/auth";
-import { AccountView, NotificationsView } from "./components/account";
+import { AccountView, NotificationsView, DietSetupView } from "./components/account";
 import { FamilyView } from "./components/family";
 import { IngredientsView } from "./components/ingredients";
 import { TemplatesView } from "./components/templates";
@@ -72,6 +72,9 @@ const App = () => {
   const [realFamilyAllergies, setRealFamilyAllergies] = useState<Record<string, any[]>>({});
   const [showFab, setShowFab] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Proposition d'initialiser le profil alimentaire — une fois, à la suite de la visite
+  // guidée (voir l'effet plus bas pour le détail du déclenchement).
+  const [showDietSetup, setShowDietSetup] = useState(false);
 
   // Familles dont l'utilisateur est membre uniquement
   const userFamilies = useMemo(() =>
@@ -1176,22 +1179,41 @@ const App = () => {
   const needsFamilySetup = currentUser && currentUser.id !== "demo" && familiesLoaded && userFamilies.length === 0;
   const mainAppVisible = currentUser && !needsFamilySetup && !familiesLoading;
 
-  // Visite guidée : une fois par utilisateur (par navigateur), à la première arrivée sur l'app principale.
-  // Exception — le compte démo la réaffiche à chaque connexion : il sert de vitrine à des
-  // visiteurs différents à chaque essai, pas à un utilisateur récurrent.
+  // Visite guidée puis (à sa suite) proposition d'initialiser le profil alimentaire — chacune
+  // une fois par utilisateur (par navigateur), à la première arrivée sur l'app principale.
+  // Décision : ne pas déclencher la proposition de profil alimentaire sur le succès de
+  // handleRegister (compte tout juste créé) — la confirmation par email est activée sur ce
+  // projet Supabase, donc handleRegister n'obtient quasiment jamais de session immédiate en
+  // pratique (l'utilisateur confirme puis se connecte via handleLogin, un chemin différent).
+  // Se caler sur "première arrivée sur l'app principale", comme la visite guidée déjà en place,
+  // couvre le cas réel indépendamment du chemin d'authentification emprunté.
+  // Exception démo : ni l'une ni l'autre (jeu de données mock déjà pré-rempli, vitrine rejouée
+  // à chaque connexion — voir la visite guidée elle-même juste en dessous).
   useEffect(() => {
     if (!mainAppVisible || !currentUser) return;
     if (currentUser.id === "demo") { setShowOnboarding(true); return; }
-    const seen = loadFromStorage(STORAGE_KEYS.onboardingSeen, []);
-    if (!seen.includes(currentUser.id)) setShowOnboarding(true);
+    const seenTour = loadFromStorage(STORAGE_KEYS.onboardingSeen, []);
+    if (!seenTour.includes(currentUser.id)) { setShowOnboarding(true); return; }
+    const seenDiet = loadFromStorage(STORAGE_KEYS.dietSetupSeen, []);
+    if (!seenDiet.includes(currentUser.id)) setShowDietSetup(true);
   }, [mainAppVisible, currentUser?.id]);
 
   const handleFinishOnboarding = () => {
     if (currentUser && currentUser.id !== "demo") {
-      const seen = loadFromStorage(STORAGE_KEYS.onboardingSeen, []);
-      if (!seen.includes(currentUser.id)) saveToStorage(STORAGE_KEYS.onboardingSeen, [...seen, currentUser.id]);
+      const seenTour = loadFromStorage(STORAGE_KEYS.onboardingSeen, []);
+      if (!seenTour.includes(currentUser.id)) saveToStorage(STORAGE_KEYS.onboardingSeen, [...seenTour, currentUser.id]);
+      const seenDiet = loadFromStorage(STORAGE_KEYS.dietSetupSeen, []);
+      if (!seenDiet.includes(currentUser.id)) setShowDietSetup(true);
     }
     setShowOnboarding(false);
+  };
+
+  const handleFinishDietSetup = () => {
+    if (currentUser && currentUser.id !== "demo") {
+      const seen = loadFromStorage(STORAGE_KEYS.dietSetupSeen, []);
+      if (!seen.includes(currentUser.id)) saveToStorage(STORAGE_KEYS.dietSetupSeen, [...seen, currentUser.id]);
+    }
+    setShowDietSetup(false);
   };
 
   return (
@@ -1214,7 +1236,7 @@ const App = () => {
       {needsFamilySetup && <FamilySetupView currentUser={currentUser} onCreateFamily={handleCreateFamily} onJoinFamily={handleJoinFamily} />}
 
       {/* App principale */}
-      {currentUser && !needsFamilySetup && !familiesLoading && (
+      {mainAppVisible && (
         <>
           <div className="mp-shell">
             <Sidebar currentView={currentView} onNavigate={setCurrentView} darkMode={darkMode} onToggleDark={() => setDarkMode((v) => !v)} currentUser={currentUser} onLogout={handleLogout} families={userFamilies} activeFamily={activeFamily} onSetActiveFamily={handleSetActiveFamily} />
@@ -1233,6 +1255,11 @@ const App = () => {
           <Toast toast={toast} />
 
           {showOnboarding && <OnboardingTour onClose={handleFinishOnboarding} />}
+
+          {showDietSetup && (
+            <DietSetupView currentUser={currentUser} ingredients={ingredients} onUpdateUserProfile={handleUpdateUserProfile}
+              onFinish={handleFinishDietSetup} />
+          )}
         </>
       )}
     </div>

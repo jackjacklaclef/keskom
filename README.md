@@ -38,7 +38,9 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
   email, membres sans compte (juste un nom), avatar emoji, appétit (Moineaux / Normal /
   Vorace), co-administration.
 - **Profil** — régime alimentaire, allergies et aliments non appréciés, pris en compte
-  dans les recettes et la liste de courses.
+  dans les recettes et la liste de courses. Proposé une fois à la première arrivée sur
+  l'app (à la suite de la visite guidée) via une fenêtre dédiée, facultative et
+  modifiable à tout moment depuis Mon compte.
 - **Visite guidée** — petit tour du propriétaire à la première connexion, un écran par
   module ; rejouable à tout moment depuis Mon compte.
 - **Compte démo** — utilisable sans backend, entièrement en local (voir plus bas).

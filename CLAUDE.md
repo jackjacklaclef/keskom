@@ -21,10 +21,10 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
 
   ```
   src/
-    App.tsx                    1235  composant App racine (state, handlers, routing)
+    App.tsx                    1269  composant App racine (state, handlers, routing)
     main.tsx                      9  point d'entrée Vite
     theme.tsx                   641  design tokens + GlobalStyle
-    constants.ts                163  constantes métier (catégories, régimes, etc.)
+    constants.ts                165  constantes métier (catégories, régimes, etc.)
     types.ts                     22  AppUser, AuthResult, AuthChangeCallback
     lib/
       supabaseClient.ts          47  client Supabase (getSupabase())
@@ -37,7 +37,7 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
       layout.tsx                216  Sidebar/MobileDrawer/FamilySelector
       auth.tsx                  370  écrans de connexion/inscription
       privacy.tsx                55  politique de confidentialité
-      account.tsx               575  compte + profil (régime/allergies/aliments non appréciés)
+      account.tsx               701  compte + profil (régime/allergies/aliments non appréciés) + proposition post-inscription
       family.tsx                289  gestion de la famille
       shopping.tsx              297  liste de courses
       templates.tsx             369  semaines types + écran dédié « Modèles »
@@ -824,6 +824,64 @@ plus simple et plus sûr à maintenir que des upserts fins.
     nécessaire pour distinguer un sous-ensemble de convives de « tout le monde »)
     supprimée après vérification, famille A revenue à son état d'origine
     (un seul membre réel, `RLS Test A`).
+- **Proposition d'initialiser le profil alimentaire** (demande explicite : « Lors de la
+  création d'un compte propose à l'utilisateur d'initialiser ses préférences
+  alimentaires ») — nouveau composant `DietSetupView` (`src/components/account.tsx`,
+  section dédiée juste avant `AccountView` puisqu'il réutilise ses mêmes briques :
+  toggles `DIET_OPTIONS`, `IngredientRestrictionPicker`, `AllergyBadge`,
+  `IngredientRestrictionBadge`). Rendu en `Modal` (pas en écran plein cadre) par-dessus
+  l'app principale, à la suite immédiate de la visite guidée (`OnboardingTour`) — même
+  position dans l'arbre JSX, même détection "une fois par utilisateur (par navigateur)"
+  via un flag `localStorage` dédié (`STORAGE_KEYS.dietSetupSeen`, tableau d'`userId`,
+  même pattern que `onboardingSeen`). Skippable : les toggles/pickers enregistrent
+  immédiatement via `onUpdateUserProfile` (aucun brouillon local, même logique que dans
+  `AccountView`) — les boutons "Passer" et "Continuer" font donc tous deux la même
+  chose (fermer la modale et marquer le flag), gardés distincts uniquement pour que le
+  texte affiché reste honnête si l'utilisateur n'a rien renseigné.
+  - **Décision de design (revirement en cours de tâche)** : la première implémentation
+    déclenchait l'écran sur le *succès* de `handleRegister` (un flag `justRegistered`),
+    directement "à la création du compte" au sens littéral. **Abandonnée après test
+    empirique** : ce projet Supabase a la confirmation par email activée pour les
+    inscriptions (confirmé en testant une vraie inscription via l'UI — Supabase a
+    d'abord rejeté deux domaines `.local`/`example.com` comme invalides, puis, avec un
+    domaine valide, a tenté d'envoyer un email de confirmation et cogné le rate-limit
+    SMTP par défaut de Supabase). Concrètement, `AuthService.signUp` n'obtient
+    quasiment jamais de session immédiate pour un compte réel : `handleRegister`
+    retourne une erreur ("email de confirmation envoyé") *avant* d'atteindre
+    `setCurrentUser`, donc un flag posé uniquement dans `handleRegister` ne se
+    déclencherait quasiment jamais en pratique — l'utilisateur confirme son email puis
+    se connecte séparément via `handleLogin`, un chemin différent. D'où le choix final
+    de se caler sur "première arrivée réelle sur l'app principale"
+    (`mainAppVisible`), exactement le même critère que la visite guidée déjà en place,
+    qui couvre le cas réel indépendamment du chemin d'authentification emprunté.
+  - **Séquencement** : l'effet qui gère l'affichage (`App.tsx`, juste après le calcul de
+    `mainAppVisible`) vérifie d'abord `onboardingSeen` (affiche la visite guidée si pas
+    vue) puis, seulement si la visite guidée est déjà vue, vérifie `dietSetupSeen`. Pour
+    un compte flambant neuf qui voit les deux pour la première fois, `handleFinishOnboarding`
+    enchaîne directement sur `setShowDietSetup(true)` à la fermeture de la visite guidée
+    plutôt que d'attendre un second passage de l'effet — évite un flash de l'app nue
+    entre les deux. Compte démo exclu des deux (comme la visite guidée existante).
+  - **Bug pré-existant révélé (mais pas causé) par les tests répétés de cette
+    fonctionnalité** : `currentUser.allergies`/`diets`/`dislikes` peuvent occasionnellement
+    apparaître vides juste après un rechargement/navigation, alors que les données sont
+    bien présentes en base (vérifié directement en SQL) — déjà documenté comme limite
+    connue plus haut ("Fonctionnalités ajoutées pendant la migration" : *"un refresh de
+    token Supabase en tâche de fond pourrait réinitialiser ces champs localement"*),
+    causé par `AuthService.onAuthChange` qui appelle `setCurrentUser(user)` sans
+    fusionner les préférences déjà chargées à chaque événement d'auth (y compris un
+    refresh de token silencieux). Reproduit à l'identique sur `AccountView` (code
+    existant, non modifié) pendant l'investigation — confirme qu'il ne s'agit pas d'un
+    effet de bord de `DietSetupView`. Pas corrigé ici (hors scope, cas limite déjà
+    connu) ; la vérification finale a donc été faite avec un enchaînement rapide
+    (toggle régime → Continuer, en dessous de la fenêtre de course) plutôt qu'en
+    espaçant les étapes.
+  - **Vérifié avec le compte de test réel** (`rls-test-a`) : modale affichée juste après
+    la visite guidée, montre correctement les données déjà en base (allergie fixture
+    "Poulet" visible en badge) ; toggle d'un régime (Végétarien) + "Continuer" → persisté
+    en base (`profile_diets`) ; rechargement de la page (même session navigateur) → ni
+    la visite guidée ni la modale préférences ne réapparaissent (flags `localStorage`
+    bien posés). Données de test (régime Végétarien ajouté pour l'essai) nettoyées après
+    coup, allergie fixture d'origine ("Poulet", `ingredient_id=9`) non touchée.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
