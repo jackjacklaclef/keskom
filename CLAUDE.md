@@ -882,6 +882,39 @@ plus simple et plus sûr à maintenir que des upserts fins.
     la visite guidée ni la modale préférences ne réapparaissent (flags `localStorage`
     bien posés). Données de test (régime Végétarien ajouté pour l'essai) nettoyées après
     coup, allergie fixture d'origine ("Poulet", `ingredient_id=9`) non touchée.
+  - **Suivi (tour suivant)** : « Confirm email » désactivé côté utilisateur dans le
+    dashboard Supabase (Authentication → Providers → Email) — décision produit prise
+    en direct pendant la session pour lever le blocage rate-limit SMTP rencontré plus
+    haut. Conséquence : `AuthService.signUp` obtient désormais une session immédiate
+    pour un vrai compte, donc `handleRegister` peut à nouveau réussir sans email de
+    confirmation — mais le déclenchement de `DietSetupView` reste volontairement basé
+    sur `mainAppVisible` (pas ramené à `handleRegister`) : ce critère fonctionne dans
+    les deux configurations (confirmation activée ou non), pas de raison de revenir en
+    arrière. Compromis à connaître si ce réglage doit être documenté ailleurs : sans
+    confirmation, n'importe quelle adresse email (même invalide/usurpée) peut créer un
+    compte — acceptable pour une app familiale à usage restreint, à reconsidérer si
+    l'inscription s'ouvre plus largement (config SMTP personnalisée type Resend en
+    remplacement, plutôt que de réactiver la confirmation par défaut).
+  - **Faux négatif de méthode de vérification rencontré en re-testant après ce
+    changement** : un utilisateur réel a signalé que la modale préférences
+    n'apparaissait pas après la visite guidée. Plusieurs scripts Puppeteer jetables
+    utilisant `document.body.innerText.includes(...)` juste après la fermeture de la
+    visite guidée ont semblé confirmer le bug (texte absent), alors que des logs de
+    diagnostic temporaires montraient `showOnboarding`/`showDietSetup` corrects à
+    chaque rendu. Cause : `innerText` dépend d'une passe de layout et peut renvoyer un
+    résultat incomplet juste après une mutation DOM rapide en Chrome headless,
+    contrairement à une requête DOM directe (`querySelector`) ou une capture d'écran.
+    Une fois les vérifications basculées sur `document.querySelectorAll(".mp-modal-backdrop")`
+    /`querySelector("h2")` plutôt que sur le texte affiché, le flux complet (inscription
+    → famille → visite guidée cliquée jusqu'au bout **ou** passée via "Passer" dès la
+    première étape) s'est confirmé fonctionnel à chaque run. Hypothèse retenue pour le
+    signalement initial : un double-clic (ou clic très rapproché) sur le bouton de
+    fermeture de la visite guidée, atterrissant sur le fond de la modale préférences
+    qui apparaît au même endroit juste après, la refermant instantanément — pas un bug
+    de logique, mais à garder en tête si un signalement similaire revient. Même leçon
+    que le faux négatif "délai d'attente insuffisant" rencontré plus haut (bug 15) :
+    pour ce genre de vérification Puppeteer sur `DietSetupView`/`OnboardingTour`,
+    préférer une requête DOM directe à une lecture de texte affiché.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
