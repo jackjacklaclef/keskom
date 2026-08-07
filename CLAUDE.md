@@ -263,23 +263,50 @@ plus simple et plus sûr à maintenir que des upserts fins.
     Corrigé en ancrant les deux branches à midi (`new Date(..., 12)`), plutôt que de
     ne patcher que la branche mois — évite de laisser la branche semaine/perso
     « correcte par chance » selon l'heure de la journée.
-15. **Glisser-déposer d'un repas : convives non transférés vers une case vide**
-    (`handleMoveMeal`, `src/App.tsx`) — repéré en creusant le signalement « les
-    convives ne sont pas transférés » sur un glisser vers une case vide (pas un
-    échange). `destData` (contenu à réécrire sur la case source une fois son ancien
-    contenu déplacé vers la destination) posait `attendeeIds: undefined` pour une
-    case de destination vide, or `undefined` a une signification précise dans
-    `upsertMealSlot` (« ne pas toucher la sélection existante ») — sur une case
-    source qui existe déjà, ça laissait donc les anciens `meal_plan_meal_attendees`
-    en place au lieu de les vider. Confirmé par un test empirique (compte
-    `rls-test-a`, glisser réel via `page.mouse`) : un repas avec des convives
-    déplacé vers une case vide gardait ces convives sur la case source désormais
-    vide, tandis que la destination recevait bien les bons convives (elle, écrite
-    avec `attendeeIds` explicite). Corrigé en remplaçant `undefined` par `[]` dans
-    ce cas précis — un échange entre deux cases pleines n'était lui pas affecté
-    (les deux `attendeeIds` sont alors toujours des tableaux explicites). Testé à
-    nouveau après correctif : case vidée correctement à la source, échange
-    bidirectionnel (recettes + convives) également revérifié.
+15. **Glisser-déposer d'un repas : convives non transférés vers une case vide, puis
+    correction du diagnostic initial** (`handleMoveMeal`, `src/App.tsx`) — repéré en
+    creusant le signalement « les convives ne sont pas transférés » sur un glisser
+    vers une case vide (pas un échange).
+    - **Premier correctif (incomplet)** : `destData` (contenu à réécrire sur la case
+      source une fois son ancien contenu déplacé vers la destination) posait
+      `attendeeIds: undefined` pour une case de destination vide, or `undefined` a une
+      signification précise dans `upsertMealSlot` (« ne pas toucher la sélection
+      existante ») — sur une case source qui existe déjà, ça laissait donc les anciens
+      `meal_plan_meal_attendees` en place au lieu de les vider. Corrigé dans un premier
+      temps en remplaçant `undefined` par `[]`, ce qui avait pour effet de faire
+      **suivre/échanger les convives avec la recette déplacée** (comme les recettes et
+      le statut) — testé et confirmé fonctionnel à l'époque.
+    - **Retour utilisateur sur ce premier correctif** : ce n'est pas le comportement
+      voulu. Les convives présents sont une propriété du **créneau** (qui est là ce
+      jour/repas-là), pas du plat qui y est servi — glisser une recette d'une case à
+      une autre ne doit jamais changer qui est présent sur les cases source et
+      destination. **Corrigé une seconde fois** : `sourceData`/`destData` ne portent
+      plus `attendeeIds` du tout (seulement `recipeIds`/`status`/`restaurantName`/
+      `restaurantUrl`) ; les deux appels à `upsertMealSlot` passent explicitement
+      `undefined` pour `attendeeIds`, qui laisse chaque créneau existant avec ses
+      propres convives inchangés (ni transférés, ni échangés) — sauf pour un nouveau
+      créneau de destination qui n'existait pas avant le glisser, où il n'y a rien à
+      « ne pas toucher » : il reçoit alors le même défaut que `handleAddMeal`, toute la
+      famille, pas les convives de la source.
+    - **Piège de vérification rencontré en testant ce second correctif** : une première
+      passe de test (compte `rls-test-a`, glisser réel via `page.mouse`) a semblé
+      montrer que le second `upsertMealSlot` (écriture sur la case source) ne
+      s'exécutait jamais — logs de diagnostic ajoutés temporairement dans
+      `handleMoveMeal`, confirmant que l'exécution s'arrêtait bien après le premier
+      appel sans lever d'erreur. Cause réelle : un délai d'attente de 2,5 s après le
+      glisser dans le script de test, insuffisant pour laisser le temps aux deux appels
+      Supabase séquentiels de se terminer (latence réseau du projet de test) — porté à
+      12 s, les deux appels et le refetch se terminent normalement. Pas un bug
+      applicatif, mais un faux négatif de la méthode de vérification — à garder en tête
+      pour la prochaine fois qu'un enchaînement de plusieurs appels Supabase awaités
+      semble "ne pas se terminer" dans un test Puppeteer jetable.
+    - **Revérifié après le second correctif** avec des convives volontairement
+      différents des deux côtés (pour bien distinguer un transfert erroné d'un maintien
+      correct) : déplacement vers une case vide → recette déplacée, case source vidée
+      de sa recette mais garde ses convives d'origine, case destination reçoit la
+      recette avec le défaut "toute la famille" (pas les convives de la source) ;
+      échange entre deux cases pleines à convives différents → recettes échangées,
+      convives de chaque case inchangés des deux côtés (jamais échangés).
 16. **Convives non éditables pour un repas Restaurant/Pas de repas**
     (`RecipeSelectionModal`, `src/components/recipeSelection.tsx`) — le bloc
     « Convives présents » avait `opacity`/`pointerEvents: none` dès que
@@ -776,8 +803,10 @@ plus simple et plus sûr à maintenir que des upserts fins.
   il est renseigné, avec `stopPropagation` pour ne pas rouvrir l'éditeur du créneau.
   `handleMoveMeal`/`handleAddMeal`/`handleUpdateMeal` (`src/App.tsx`) et
   `upsertMealSlot` (`src/lib/dataLayer.ts`) propagent ces deux champs comme le reste
-  du contenu d'un créneau (recettes/statut/convives), y compris lors d'un
-  glisser-déposer.
+  du contenu-plat d'un créneau (recettes/statut), y compris lors d'un glisser-déposer
+  — mais **pas** comme les convives, qui suivent une règle différente depuis la
+  correction du bug 15 (voir ci-dessus : ils restent attachés au créneau, jamais
+  transférés/échangés avec le contenu déplacé).
   - **Bug latent découvert et corrigé en cours de route** : `QuickPlanModal`
     (accessible depuis le bouton flottant « + », `src/components/calendar.tsx`) ne
     passait jamais de prop `onSaveStatus` à `RecipeSelectionModal` — choisir
@@ -786,13 +815,8 @@ plus simple et plus sûr à maintenir que des upserts fins.
     Jamais remarqué car ce chemin spécifique n'avait apparemment jamais été testé
     avec un statut non-normal. Corrigé en câblant `onSaveStatus` comme les 3 autres
     points d'entrée (`DayPanel`, vue Semaine, vue Perso).
-  - **Vérifié avec le compte de test réel** (`rls-test-a`, famille A) : glisser d'un
-    repas avec convives (sous-ensemble, pas juste « tout le monde »/« personne »)
-    vers une case vide → convives correctement présents à la destination et
-    correctement vidés à la source (confirmait le bug 15 puis son correctif) ;
-    glisser en échange entre deux cases pleines (recettes + convives différents des
-    deux côtés) → échange complet et correct des deux côtés ; passage au statut
-    Restaurant → bloc convives redevient cliquable (`pointerEvents: auto`,
+  - **Vérifié avec le compte de test réel** (`rls-test-a`, famille A) : passage au
+    statut Restaurant → bloc convives redevient cliquable (`pointerEvents: auto`,
     `opacity: 1`, vérifié par lecture du style calculé) et un convive retiré via
     clic est bien répercuté en base ; nom + lien saisis (« Chez Mario » +
     URL Maps) → persistés en base et affichés sur la carte avec l'icône lien

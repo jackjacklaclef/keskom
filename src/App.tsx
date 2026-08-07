@@ -795,26 +795,31 @@ const App = () => {
     if (isSlotEmpty(sourceMeal)) return;
     const destMeal = familyMealPlans.find((mp) => mp.date === destDateStr && mp.type === destType);
 
+    // Les convives sont une propriété du créneau (qui est là ce jour/repas-là), pas du plat
+    // qui y est servi : ils ne doivent jamais suivre/échanger avec le déplacement d'une recette.
     const sourceData = {
-      recipeIds: sourceMeal.recipeIds || [], status: sourceMeal.status || "normal", attendeeIds: sourceMeal.attendeeIds,
+      recipeIds: sourceMeal.recipeIds || [], status: sourceMeal.status || "normal",
       restaurantName: sourceMeal.restaurantName, restaurantUrl: sourceMeal.restaurantUrl,
     };
     const destData = isSlotEmpty(destMeal)
-      ? { recipeIds: [], status: "normal", attendeeIds: [], restaurantName: null, restaurantUrl: null }
+      ? { recipeIds: [], status: "normal", restaurantName: null, restaurantUrl: null }
       : {
-          recipeIds: destMeal.recipeIds || [], status: destMeal.status || "normal", attendeeIds: destMeal.attendeeIds,
+          recipeIds: destMeal.recipeIds || [], status: destMeal.status || "normal",
           restaurantName: destMeal.restaurantName, restaurantUrl: destMeal.restaurantUrl,
         };
 
     if (isDemo) {
       setMealPlans((prev) => {
         let next = prev.map((mp) => {
-          if (mp.id === sourceMeal.id) return { ...mp, recipeIds: destData.recipeIds, status: destData.status, attendeeIds: destData.attendeeIds, restaurantName: destData.restaurantName, restaurantUrl: destData.restaurantUrl };
-          if (destMeal && mp.id === destMeal.id) return { ...mp, recipeIds: sourceData.recipeIds, status: sourceData.status, attendeeIds: sourceData.attendeeIds, restaurantName: sourceData.restaurantName, restaurantUrl: sourceData.restaurantUrl };
+          if (mp.id === sourceMeal.id) return { ...mp, recipeIds: destData.recipeIds, status: destData.status, restaurantName: destData.restaurantName, restaurantUrl: destData.restaurantUrl };
+          if (destMeal && mp.id === destMeal.id) return { ...mp, recipeIds: sourceData.recipeIds, status: sourceData.status, restaurantName: sourceData.restaurantName, restaurantUrl: sourceData.restaurantUrl };
           return mp;
         });
         if (!destMeal) {
-          next = [...next, { id: `mv-${Date.now()}`, date: destDateStr, type: destType, recipeIds: sourceData.recipeIds, status: sourceData.status, attendeeIds: sourceData.attendeeIds, restaurantName: sourceData.restaurantName, restaurantUrl: sourceData.restaurantUrl, familyId: activeFamily?.id }];
+          // Nouveau créneau (aucune ligne existante dont on pourrait "garder" les convives) :
+          // même défaut que handleAddMeal — toute la famille, pas ceux de la source.
+          const defaultAttendeeIds = (activeFamily?.members || []).map((m: any) => m.memberId || m.userId).filter(Boolean);
+          next = [...next, { id: `mv-${Date.now()}`, date: destDateStr, type: destType, recipeIds: sourceData.recipeIds, status: sourceData.status, attendeeIds: defaultAttendeeIds, restaurantName: sourceData.restaurantName, restaurantUrl: sourceData.restaurantUrl, familyId: activeFamily?.id }];
         }
         return next;
       });
@@ -824,8 +829,10 @@ const App = () => {
     if (!activeFamily?.id) return;
     try {
       const sb = await getSupabase();
-      await upsertMealSlot(sb, activeFamily.id, currentUser.id, destDateStr, destType, sourceData.recipeIds, sourceData.status, sourceData.attendeeIds, sourceData.restaurantName, sourceData.restaurantUrl);
-      await upsertMealSlot(sb, activeFamily.id, currentUser.id, sourceDateStr, sourceType, destData.recipeIds, destData.status, destData.attendeeIds, destData.restaurantName, destData.restaurantUrl);
+      // attendeeIds: undefined → upsertMealSlot ne touche pas la sélection existante du créneau
+      // (ou la peuple par défaut avec toute la famille si le créneau est réellement nouveau).
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, destDateStr, destType, sourceData.recipeIds, sourceData.status, undefined, sourceData.restaurantName, sourceData.restaurantUrl);
+      await upsertMealSlot(sb, activeFamily.id, currentUser.id, sourceDateStr, sourceType, destData.recipeIds, destData.status, undefined, destData.restaurantName, destData.restaurantUrl);
       setMealPlans(await fetchMealPlansForFamily(activeFamily.id));
     } catch { showToast("Erreur lors du déplacement du repas", "clay"); }
   };
