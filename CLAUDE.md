@@ -915,6 +915,14 @@ plus simple et plus sûr à maintenir que des upserts fins.
     que le faux négatif "délai d'attente insuffisant" rencontré plus haut (bug 15) :
     pour ce genre de vérification Puppeteer sur `DietSetupView`/`OnboardingTour`,
     préférer une requête DOM directe à une lecture de texte affiché.
+- **Recherche de recette élargie aux tags** (demande explicite) — le champ de recherche
+  de `RecipesView` (`src/components/recipes.tsx`) ne filtrait que sur `r.name`. Étendu
+  pour matcher aussi `r.tags` (chaque tag comparé en `includes`, insensible à la casse) :
+  une recette apparaît désormais si le texte recherché correspond à son nom **ou** à
+  l'un de ses tags. Un seul point de filtrage (`filtered`), déjà partagé par les vues
+  grille et compacte — un seul changement couvre les deux. Vérifié avec le compte démo :
+  recherche du tag "Rapide" (absent de tout nom de plat) → les 9 recettes portant ce
+  tag remontent correctement.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
