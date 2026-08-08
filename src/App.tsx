@@ -67,6 +67,26 @@ const App = () => {
   const [shoppingList, setShoppingList] = useState<any[]>(() => isDemo ? initialShoppingList : []);
   const [ingredients, setIngredients] = useState<any[]>(() => isDemo ? initialIngredients : []);
   const [weekTemplates, setWeekTemplates] = useState<any[]>(() => []);
+  // Les initialisateurs `useState` ci-dessus (isDemo ? ... : []) ne s'exécutent qu'au
+  // tout premier rendu du composant. Or au premier rendu, `currentUser` (donc `isDemo`)
+  // vaut encore `null`/`false` pour quiconque n'était pas déjà connecté avant ce
+  // chargement de page — cas normal d'une connexion démo via le bouton "Essayer" sur
+  // l'écran de connexion. Sans cet effet, `recipes`/`mealPlans`/`shoppingList`/
+  // `ingredients` restaient donc bloqués à `[]` pour toute la session malgré une
+  // connexion démo réussie : le compte démo semblait vide (calendrier, courses,
+  // ingrédients) alors que `isDemo` valait bien `true` juste après. Repéré en
+  // creusant pourquoi les captures d'écran de la visite guidée restaient vides même
+  // après correction du bug de reconnexion (voir authService.ts). La vitrine démo
+  // repart volontairement de zéro à chaque connexion (pas de fusion avec d'éventuelles
+  // données précédentes) — cohérent avec le reste du compte démo, pensé comme une
+  // vitrine rejouée à l'identique pour chaque visiteur plutôt qu'une session persistante.
+  useEffect(() => {
+    if (currentUser?.id !== "demo") return;
+    setRecipes(initialRecipes);
+    setMealPlans(initialMealPlans);
+    setShoppingList(initialShoppingList);
+    setIngredients(initialIngredients);
+  }, [currentUser?.id]);
   // Allergies de tous les membres de la famille active, { [memberId]: [{type, id}] } —
   // sert au contrôle ingrédients×allergies sur la carte de repas du planning.
   const [realFamilyAllergies, setRealFamilyAllergies] = useState<Record<string, any[]>>({});

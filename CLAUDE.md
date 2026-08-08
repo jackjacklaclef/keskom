@@ -315,6 +315,64 @@ plus simple et plus sûr à maintenir que des upserts fins.
     (`RecipeRow`) doit rester désactivé pour ces statuts (choisir un plat n'a pas
     de sens hors "normal") — la désactivation du bloc convives a été retirée sans
     toucher à celle des recettes.
+17. **Connexion démo qui se déconnecte toute seule ~1s après "Essayer" (et après tout
+    rechargement de page)** (`src/lib/authService.ts`, `initSupabaseListener`) —
+    découvert en essayant de scripter une connexion démo pour régénérer les captures
+    d'écran de la visite guidée. `AuthService.onAuthChange` initialise
+    inconditionnellement un abonnement à `sb.auth.onAuthStateChange`, y compris pour un
+    visiteur qui va se connecter en démo — ce listener Supabase notifie une fois, de
+    façon asynchrone, avec `session = null` dès l'abonnement (comportement standard de
+    supabase-js). Cette notification arrivait *après* une connexion démo déjà réussie
+    (ou déjà restaurée depuis le `localStorage` au chargement) et appelait
+    `notify(null)`, ramenant silencieusement l'utilisateur à l'écran de connexion
+    quelques centaines de ms plus tard — reproductible à 100% en observant l'état de la
+    page à intervalles de 400ms après le clic sur "Essayer". Corrigé en ignorant cette
+    notification "pas de session" précise quand `localStorage["mealPlanner_
+    currentUser"].id === "demo"` (seule source de vérité qui reste valide même juste
+    après un rechargement, avant que ce module n'ait lui-même revu la moindre
+    notification) — le compte démo n'a jamais de session Supabase, cet événement ne le
+    concerne donc jamais.
+18. **Calendrier/courses/ingrédients du compte démo vides malgré une connexion réussie**
+    (`src/App.tsx`) — découvert juste après avoir corrigé le bug précédent : la
+    connexion démo restait stable, mais `recipes`/`mealPlans`/`shoppingList`/
+    `ingredients` (initialisés via `useState(() => isDemo ? initialX : [])`) restaient
+    bloqués à `[]` pour toute la session. Cause : ces initialisateurs ne s'exécutent
+    qu'au tout premier rendu du composant, où `currentUser` (donc `isDemo`) vaut encore
+    `null`/`false` pour quiconque n'était pas déjà connecté avant ce chargement de page
+    — le cas normal d'une connexion via le bouton "Essayer" sur l'écran de connexion.
+    Corrigé par un effet dédié qui (re)seed ces quatre tableaux dès que `currentUser?.id`
+    devient `"demo"`, quel que soit l'état des initialisateurs `useState`. Combiné à un
+    second bug de schéma (point suivant), c'est ce qui faisait que **toutes** les
+    captures d'écran précédentes de la visite guidée montraient des écrans vides — pas
+    un défaut de mise en scène, le compte démo ne pouvait littéralement pas afficher son
+    propre jeu de données.
+19. **`initialRecipes` (jeu de données du compte démo, `src/lib/storage.ts`) sans champ
+    `scope`** — repéré en constatant qu'un repas du planning démo avec un `recipeIds`
+    non vide affichait quand même "+ Ajouter" au lieu du nom de la recette (confirmé par
+    inspection directe du DOM : la case portait bien la bordure d'accent et la poignée
+    de glisser d'un créneau rempli, seul le nom du plat manquait). Cause : `familyRecipes`
+    (`src/App.tsx`, filtre introduit pour le partage de recettes multi-famille) exige
+    `scope === "global"` ou `createdBy`/`sharedWith`/`familyId` correspondant à
+    l'utilisateur — champs qu'`initialRecipes` n'a jamais eus. Toutes les recettes démo
+    étaient donc invisibles partout où `familyRecipes` est utilisé (cartes du planning,
+    génération de la liste de courses...), sans erreur ni écran vide évident — seul
+    "Base commune" (`RecipesView`, alimenté par la prop distincte `globalRecipes`, non
+    filtrée) fonctionnait, ce qui a longtemps masqué le problème. Corrigé en taguant
+    `initialRecipes` avec `scope: "global"` à l'export (`rawInitialRecipes.map(r => ({
+    ...r, scope: "global" }))`) — cohérent avec la façon dont ces recettes sont déjà
+    traitées ailleurs (prop `globalRecipes: isDemo ? initialRecipes : ...`).
+20. **Mise à jour du profil démo qui efface les champs précédemment renseignés de
+    l'écran** (`AuthService.updateProfile`, `src/lib/authService.ts`) — repéré en
+    enchaînant régime → allergies → aliments non appréciés depuis "Mon compte" du
+    compte démo pour peupler les captures d'écran : chaque étape faisait disparaître la
+    précédente de l'écran (le régime coché disparaissait après avoir renseigné une
+    allergie, l'allergie disparaissait après avoir renseigné un aliment non apprécié...).
+    Cause : la branche démo notifiait les abonnés avec `{ ...DEMO_USER, ...updates }`
+    (le profil démo *par défaut*, vierge) au lieu de `{ ...current, ...updates }` (le
+    profil réellement affiché jusque-là) — seul le `localStorage` accumulait
+    correctement les champs (via une ligne distincte, déjà correcte), ce qui rendait le
+    bug invisible après un rechargement complet et a retardé le diagnostic. Corrigé en
+    alignant `notify(...)` sur la même base fusionnée que la ligne `saveToStorage`.
 
 ## Bugs connus, non corrigés
 
@@ -985,6 +1043,41 @@ plus simple et plus sûr à maintenir que des upserts fins.
     avertissements pré-existants). Vérifié en direct avec le compte de test réel : onglet
     "Base commune" affiche bien 105 recettes (55 + 50), recherche fonctionnelle sur les
     nouvelles recettes.
+- **Captures d'écran de la visite guidée rafraîchies + texte du Calendrier plus précis**
+  (demande explicite : « mets à jour la présentation initiale avec des captures d'écran
+  mises à jour, il faut qu'il y ait une présentation plus précise du planning ») — les 7
+  captures dans `src/assets/onboarding/` dataient du 31 juillet et montraient des écrans
+  quasi vides (calendrier sans repas, courses/modèles vides, aucune allergie/régime) alors
+  que l'app avait beaucoup évolué depuis (glisser-déposer, alerte allergie, plan de prépa,
+  lieu du restaurant, photos de recette, régime/aliments non appréciés...). Regénérées via
+  compte démo + scripts jetables hors repo (même convention que d'habitude), avec cette
+  fois un jeu de données démo volontairement enrichi avant capture (allergie Poulet,
+  aliment non apprécié Poivron, régime Faible en sucre, un second membre de famille sans
+  compte, une semaine avec un repas simple, un repas à 2 recettes pour montrer le bouton
+  Plan de prépa, un repas Restaurant avec nom de lieu, et un repas contenant l'allergène
+  pour montrer le bouton Allergie) plutôt que de re-capturer les mêmes écrans vides.
+  `onboarding.tsx` : texte de l'étape "Le Calendrier" réécrit pour couvrir ces
+  fonctionnalités (alerte allergie, plan de prépa, lieu du restaurant, glisser-déposer),
+  et l'étape "Les Recettes" corrigée (« une bonne cinquantaine » → « plus d'une centaine »,
+  desormais exact pour un compte réel — 105 recettes globales).
+  - **Quatre bugs réels, jusque-là inaperçus, découverts et corrigés en essayant de
+    peupler le compte démo pour ces captures** (aucun rapport avec Supabase/RLS — tous
+    dans le chemin 100% local du compte démo, `src/lib/authService.ts`/`src/lib/
+    storage.ts`/`src/App.tsx`) — voir le détail dans "Bugs découverts et corrigés"
+    ci-dessus (points 17-20). En résumé : la connexion démo se déconnectait toute seule
+    ~1s après "Essayer" (et aussi après un simple rechargement de page) ; le calendrier/
+    les courses/les ingrédients du compte démo restaient vides malgré une connexion
+    réussie ; les recettes démo ne s'affichaient nulle part dans le planning (nom de
+    plat manquant malgré un créneau non vide) ; et chaque modification de profil démo
+    (régime, puis allergies, puis aliments non appréciés) effaçait les précédentes de
+    l'écran. Les quatre combinés expliquent pourquoi les captures précédentes montraient
+    des écrans vides : ce n'était
+    pas qu'un manque de mise en scène, le compte démo ne pouvait tout simplement pas
+    afficher son propre jeu de données de démonstration.
+  - Vérifié : `npm run build`, `npm run typecheck` (parité, aucune régression au-delà
+    du style pré-existant), `npm run test:rls` (aucune table concernée, resté vert),
+    tour rejouée en conditions réelles (compte démo, scripts jetables) avec les 7
+    nouvelles images et le nouveau texte.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

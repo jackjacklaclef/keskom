@@ -97,7 +97,24 @@ export const AuthService = (() => {
     _listenerInitialized = true;
     const { data: { subscription } } = sb.auth.onAuthStateChange(
       async (_event: string, session: any) => {
-        if (!session) { notify(null); return; }
+        if (!session) {
+          // Le compte démo n'a jamais de session Supabase : l'événement initial
+          // "pas de session" de ce listener (déclenché à l'abonnement, en tâche de
+          // fond dès le montage de l'app, y compris après un simple rechargement de
+          // page) arrive de façon asynchrone et peut donc survenir *après* qu'une
+          // session démo a déjà été établie (au login) ou restaurée (au rechargement,
+          // via getSession() → localStorage) — sans cette garde, il écrase la session
+          // démo en cours quelques centaines de ms plus tard (repéré en vérifiant les
+          // captures d'écran de la visite guidée : le compte démo revenait
+          // systématiquement à l'écran de connexion peu après "Essayer", et aussi
+          // après un simple rechargement). On vérifie le localStorage plutôt qu'un
+          // état interne : c'est la seule source de vérité pour "suis-je le compte
+          // démo ?" qui reste valide même juste après un rechargement de page (avant
+          // que ce module n'ait lui-même revu passer la moindre notification).
+          if (loadFromStorage(STORAGE_KEYS.currentUser, null)?.id === "demo") return;
+          notify(null);
+          return;
+        }
         try {
           const profile = await ensureProfile(sb, session.user.id, session.user.user_metadata?.name || session.user.email?.split("@")[0] || "", session.user.email || "");
           notify(profileToAppUser(session, profile));
@@ -214,9 +231,17 @@ export const AuthService = (() => {
     updateProfile: async (userId: string, updates: Partial<AppUser>) => {
       // Mise à jour démo en localStorage
       if (userId === "demo") {
-        const current = loadFromStorage(STORAGE_KEYS.currentUser, null);
-        if (current) saveToStorage(STORAGE_KEYS.currentUser, { ...current, ...updates });
-        notify({ ...DEMO_USER, ...updates });
+        const current = loadFromStorage(STORAGE_KEYS.currentUser, null) || DEMO_USER;
+        const merged = { ...current, ...updates };
+        saveToStorage(STORAGE_KEYS.currentUser, merged);
+        // Fusionner sur `current` (pas sur `DEMO_USER`) : sinon chaque mise à jour de
+        // profil démo (régime, puis allergies, puis aliments non appréciés...) réinitialise
+        // silencieusement dans l'état React affiché tous les autres champs déjà renseignés
+        // lors d'un appel précédent — repéré en enchaînant régime → allergies → aliments non
+        // appréciés depuis Mon compte : chaque étape faisait disparaître la précédente de
+        // l'écran (mais restait correcte en localStorage, donc invisible après un simple
+        // rechargement, ce qui a retardé le diagnostic).
+        notify(merged);
         return;
       }
       const sb = await getSupabase();

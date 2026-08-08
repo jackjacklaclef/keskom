@@ -23,14 +23,14 @@ const STEPS = [
     id: "calendar",
     eyebrow: "Le coeur de la maison",
     title: "Le Calendrier",
-    text: "Tu poses les repas de la semaine, tu dis qui sera là ce soir-là, et toute la famille voit le menu d'un coup d'oeil. Plusieurs plats au même repas ? Le bouton « Plan de prépa » te dit quoi préparer d'abord et quoi cuisiner en même temps.",
+    text: "Tu remplis chaque case avec une ou plusieurs recettes et tu dis qui sera là — toute la famille voit le menu d'un coup d'oeil, et une alerte apparaît si quelqu'un est allergique à un ingrédient prévu. Plusieurs plats au même repas ? Le bouton « Plan de prépa » te dit quoi préparer d'abord et quoi cuisiner en même temps. Un soir au resto ? Note le nom du lieu directement sur la case. Et pour réorganiser la semaine, glisse-dépose un repas d'une case à l'autre.",
     image: calendarImg,
   },
   {
     id: "recipes",
     eyebrow: "Le tiroir à idées",
     title: "Les Recettes",
-    text: "Toutes vos recettes rangées au même endroit, plus une bonne cinquantaine de classiques déjà prêts si l'inspiration manque.",
+    text: "Toutes vos recettes rangées au même endroit, plus d'une centaine de classiques déjà prêts si l'inspiration manque.",
     image: recipesImg,
   },
   {

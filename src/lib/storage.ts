@@ -53,7 +53,14 @@ export const generateInviteCode = () =>
 // MOCK DATA — jeu de données local pour le compte démo
 // ============================================================
 
-export const initialRecipes = [
+// Compte démo : traitées comme le catalogue global (mêmes critères que la colonne
+// `scope` côté Supabase) — nécessaire pour que `familyRecipes` (App.tsx, filtre par
+// scope/propriétaire/partage) les laisse passer. Sans `scope: "global"` explicite ici,
+// ce filtre les excluait toutes : les repas du planning démo affichaient "+ Ajouter"
+// au lieu du nom de la recette malgré un `recipeIds` non vide, la liste de courses
+// générée restait vide, etc. — silencieux car "Base commune" (RecipesView) les affiche
+// via une prop distincte (`globalRecipes`, non filtrée) qui masquait le problème.
+const rawInitialRecipes = [
   // ---- Plats principaux ----
   {
     id: "1", name: "Pâtes carbonara", category: "main", portions: 4,
@@ -583,6 +590,8 @@ export const initialRecipes = [
     tags: ["Anti-gaspillage", "Goûter", "Enfants"],
   },
 ];
+
+export const initialRecipes = rawInitialRecipes.map((r) => ({ ...r, scope: "global" }));
 
 export const initialMealPlans = [
   { id: "1", date: new Date().toISOString().split("T")[0], recipeIds: ["1"], type: "lunch" },
