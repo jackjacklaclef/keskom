@@ -923,6 +923,68 @@ plus simple et plus sûr à maintenir que des upserts fins.
   grille et compacte — un seul changement couvre les deux. Vérifié avec le compte démo :
   recherche du tag "Rapide" (absent de tout nom de plat) → les 9 recettes portant ce
   tag remontent correctement.
+- **50 nouvelles recettes chinoises depuis xiachufang.com, uniquement notées >8,5**
+  (demande explicite, à la suite de la recherche par tags ci-dessus) — porte le
+  catalogue global de 55 à 105 recettes, dont 57 chinoises (les 7 déjà présentes +
+  50 nouvelles). Contrainte stricte de l'utilisateur : n'inclure que des recettes dont
+  la note affichée sur xiachufang est **strictement supérieure à 8,5** (échelle sur 10),
+  jamais estimée.
+  - **Sourcing en 4 agents parallèles** (un par famille de plats : viandes, légumes/tofu,
+    soupes/nouilles/riz, en-cas/desserts, chacun ciblant 12-15 recettes pour couvrir la
+    perte due aux doublons/rejets) — nécessaire car `www.xiachufang.com` bloque les
+    fetchs automatisés par un CAPTCHA anti-bot ; seul le sous-domaine mobile
+    `m.xiachufang.com/recipe/<id>/` reste accessible. Chaque agent a dû résoudre
+    indépendamment le même problème : la note n'est pas toujours extractible en texte
+    brut du rendu HTML d'une fiche recette individuelle (parfois un widget graphique/JS).
+    Méthodes de contournement trouvées par les agents, à retenir si le sujet revient :
+    lire les pages de **catégorie/liste** (`m.xiachufang.com/category/<id>/`, qui
+    affichent la note en texte brut pour chaque recette listée) plutôt que les fiches
+    individuelles ; ou parser le blob `window.__NUXT__` embarqué dans le HTML de la page
+    (contient le champ `score` exact) ; ou chercher directement le JSON-LD
+    `aggregateRating` via `curl` + regex plutôt que le rendu Markdown de l'outil de fetch,
+    qui s'est avéré peu fiable pour les notes (a « halluciné » des valeurs à plusieurs
+    reprises — confirmé en recoupant avec le HTML brut). Tout candidat dont la note
+    n'était pas confirmable par une de ces méthodes a été écarté, même si un résultat de
+    recherche suggérait une note élevée.
+  - **Consolidation** : 52 recettes récoltées au total, dédupliquées à 50 — un doublon
+    exact (même `source_url`, 韭菜盒子/chaussons à la ciboule chinoise repéré par deux
+    agents différents) et un quasi-doublon retiré par choix éditorial (deux versions de
+    riz frit aux œufs proposées par le même agent ; conservé seulement la version
+    « technique du chef », plus différenciée). Les noms d'ingrédients `NOUVEAU: ...`
+    proposés indépendamment par les 4 agents ont dû être unifiés avant insertion (ex.
+    « Sucre candi » et « Sucre candi chinois » → un seul ingrédient ; trois variantes de
+    « filet de porc » → une seule) pour éviter des doublons dans le catalogue partagé.
+  - **79 nouveaux ingrédients** ajoutés au catalogue partagé `ingredients` (ids 118-196)
+    pour couvrir des produits de cuisine chinoise absents jusqu'ici malgré le seed
+    précédent — notamment l'huile de sésame (surprenant qu'elle manquait encore),
+    plusieurs champignons séchés chinois, épices à braisage (badiane/cannelle de Chine
+    déjà là, mais cardamome/réglisse/galanga/écorce de mandarine séchée manquantes),
+    nouilles/pâtes chinoises, farine de riz gluant, saindoux, œufs de cent ans, etc.
+    Catégorisation alignée sur les conventions déjà en place pour les ingrédients
+    existants (vérifié par requête avant assignation : ex. les bouillons sont classés
+    "autres" et non "sauces", les fruits secs/graines sous "fruits", les fruits de mer
+    sous "viande" — mêmes règles réappliquées ici pour cohérence).
+  - **Génération et application du SQL** : script Node jetable (hors dépôt,
+    `scratchpad/xcf/`) qui résout chaque nom d'ingrédient vers son id (catalogue existant
+    + nouveaux) et échoue fort au moindre nom non résolu, plutôt que d'insérer une ligne
+    cassée — même précaution que pour les seeds précédents. SQL généré avec des CTE
+    chaînées (`with r as (insert ... returning id), ri as (insert recipe_ingredients
+    select r.id, ...), rs as (insert recipe_steps select r.id, ...)`) pour insérer
+    recette + ingrédients + étapes en une seule requête atomique par recette, appliqué en
+    5 lots de 10 via `execute_sql`. Étapes taguées `phase` (prep/cook) recette par
+    recette selon la même règle que le seed initial (pas de feu = prep, y compris
+    assemblage final si aucune cuisson n'est impliquée).
+  - **Contrôle qualité** : aucune photo ajoutée pour ce lot (hors scope de la demande,
+    contrairement au chantier photo précédent) — uniquement nom, catégorie, portions,
+    temps prépa/cuisson, ingrédients avec quantités (`quantity_label` texte libre, même
+    convention que le seed chinois initial : `amount`/`unit` structurés laissés `null`),
+    étapes numérotées avec phase. Vérifié après application : 0 recette sans ingrédients,
+    0 recette sans étapes, 620 lignes `recipe_ingredients` et 386 lignes `recipe_steps`
+    au total sur les 57 recettes chinoises. `npm run build`, `npm run test:rls` (17/17)
+    et les advisors de sécurité Supabase revérifiés après coup (aucune régression, mêmes
+    avertissements pré-existants). Vérifié en direct avec le compte de test réel : onglet
+    "Base commune" affiche bien 105 recettes (55 + 50), recherche fonctionnelle sur les
+    nouvelles recettes.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

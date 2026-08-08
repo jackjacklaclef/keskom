@@ -26,11 +26,11 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
   recette assignée, et ouvre le détail (plat, ingrédient, personne concernée). Pour un
   repas au restaurant, un nom de lieu et un lien (Google Maps ou autre) peuvent être
   renseignés et s'affichent directement sur la carte.
-- **Recettes** — catalogue partagé (recettes globales) + recettes privées ou partagées
-  au sein d'une famille, variantes d'une recette existante, étapes numérotées avec
-  minuteur et photo, mode « Cuisine » pas-à-pas. Pays d'origine et temps de
-  préparation/cuisson affichés sur chaque recette, photo du plat pour toutes les
-  recettes du catalogue partagé.
+- **Recettes** — catalogue partagé de plus de 100 recettes (recettes globales) +
+  recettes privées ou partagées au sein d'une famille, variantes d'une recette
+  existante, étapes numérotées avec minuteur et photo, mode « Cuisine » pas-à-pas.
+  Pays d'origine et temps de préparation/cuisson affichés sur chaque recette, photo du
+  plat pour une partie du catalogue partagé. Recherche par nom ou par tag.
 - **Liste de courses** — générée automatiquement à partir du planning sur une période
   donnée, en tenant compte du nombre de portions de chaque recette et de l'appétit de
   chaque convive.
