@@ -814,7 +814,12 @@ export const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingr
 
   const filtered = displayRecipes.filter((r) => {
     if (filterCategory && r.category !== filterCategory) return false;
-    if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesName = r.name.toLowerCase().includes(q);
+      const matchesTag = (r.tags || []).some((tag) => tag.toLowerCase().includes(q));
+      if (!matchesName && !matchesTag) return false;
+    }
     return true;
   });
 
