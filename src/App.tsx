@@ -645,12 +645,13 @@ const App = () => {
   // ---- Recettes ----
   const handleAddRecipe = async (recipe) => {
     if (isDemo) {
+      const id = recipe.id || Date.now().toString();
       setRecipes((prev) => [...prev, {
-        ...recipe, id: recipe.id || Date.now().toString(), createdBy: currentUser?.id,
+        ...recipe, id, createdBy: currentUser?.id,
         scope: "shared", sharedWith: activeFamily ? [activeFamily.id] : [],
         parentId: recipe.parentId || null, rootId: recipe.rootId || null, variantName: recipe.variantName || null,
       }]);
-      return;
+      return id;
     }
     try {
       const sb = await getSupabase();
@@ -660,6 +661,7 @@ const App = () => {
         scope: activeFamily ? "family" : "private", owner_profile_id: currentUser.id, family_id: activeFamily?.id || null,
         recipe_category_id: categoryMap[recipe.category] || null, created_by: currentUser.id, variant_name: recipe.variantName || null,
         origin_country: recipe.originCountry || null, prep_minutes: recipe.prepMinutes || null, cook_minutes: recipe.cookMinutes || null,
+        dish_type: recipe.dishType || "recipe", shopping_quantity_label: recipe.shoppingQuantityLabel || null,
       }).select("id").single();
       if (error) throw error;
       await saveRecipeIngredients(sb, newRow.id, recipe.ingredients || []);
@@ -671,6 +673,7 @@ const App = () => {
         });
       }
       setRecipes(await fetchRecipesForUser());
+      return String(newRow.id);
     } catch { showToast("Erreur lors de l'enregistrement de la recette", "clay"); }
   };
 
@@ -686,6 +689,7 @@ const App = () => {
         name: updated.name, description: updated.description || null, portions: updated.portions || 4,
         tags: updated.tags || [], recipe_category_id: categoryMap[updated.category] || null, variant_name: updated.variantName || null,
         origin_country: updated.originCountry || null, prep_minutes: updated.prepMinutes || null, cook_minutes: updated.cookMinutes || null,
+        shopping_quantity_label: updated.shoppingQuantityLabel ?? null,
       }).eq("id", Number(updated.id));
       if (error) throw error;
       await saveRecipeIngredients(sb, Number(updated.id), updated.ingredients || []);
@@ -923,6 +927,14 @@ const App = () => {
       (meal.recipeIds || []).forEach((recipeId) => {
         const recipe = familyRecipes.find((r) => r.id === recipeId); if (!recipe) return;
         recipeCount++;
+        if (recipe.dishType === "ready_made") {
+          // Produit tout prêt : quantité fixe par occurrence du repas (ex. "1 barquette"),
+          // pas recalculée selon les convives — un emballage n'est pas divisible par portion.
+          const key = recipe.name;
+          const qty = recipe.shoppingQuantityLabel || "1";
+          aggregated.set(key, aggregated.has(key) ? addQty(aggregated.get(key), qty) : qty);
+          return;
+        }
         const attendeeIds = meal.attendeeIds?.length ? meal.attendeeIds : (activeFamily?.members || []).map((m) => m.memberId || m.userId);
         // Portions pondérées par appétit (Vorace ×1.3 / Normal ×1 / Moineaux ×0.8) plutôt qu'un simple headcount.
         const weightedParts = attendeeIds.reduce((sum, id) => sum + appetiteMultiplierOf(memberById.get(id)), 0);
@@ -1166,7 +1178,7 @@ const App = () => {
   };
 
   const viewProps = {
-    calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, onMoveMeal: handleMoveMeal, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [], ingredients, familyAllergies },
+    calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, onMoveMeal: handleMoveMeal, onAddRecipe: handleAddRecipe, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [], ingredients, familyAllergies },
     recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: isDemo ? initialRecipes : recipes.filter((r) => r.scope === "global"), ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
     ingredients: { ingredients, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient },
@@ -1268,7 +1280,7 @@ const App = () => {
           </button>
 
           {showFab && (
-            <QuickPlanModal recipes={familyRecipes} recentRecipeIds={recentRecipeIds} familyMembers={activeFamily?.members || []} onClose={() => setShowFab(false)}
+            <QuickPlanModal recipes={familyRecipes} recentRecipeIds={recentRecipeIds} familyMembers={activeFamily?.members || []} onAddRecipe={handleAddRecipe} onClose={() => setShowFab(false)}
               onSave={(mealData) => { handleAddMeal(mealData); setShowFab(false); showToast(`Repas planifié le ${mealData.date}`); }} />
           )}
 

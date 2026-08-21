@@ -150,6 +150,13 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
     explicite sur `storage.objects` pour ce bucket : un bucket `public=true` sert déjà
     les objets par URL sans passer par RLS, une policy `SELECT` n'aurait fait qu'exposer
     le *listing* complet du bucket (repéré et supprimé via l'advisor de sécurité).
+  - `recipes.dish_type` ∈ `recipe|simple|ready_made` (défaut `recipe`) +
+    `recipes.shopping_quantity_label` (texte, `ready_made` seulement) — un « plat
+    simple » ou un « produit tout prêt » (ex. Picard) sont des recettes allégées sans
+    ingrédients/étapes, réutilisables comme une vraie recette ; voir "Fonctionnalités
+    ajoutées après la migration" pour le détail. Migration purement additive, aucune
+    policy RLS touchée (le CRUD `recipes` reste gouverné par `owner_profile_id`/`scope`,
+    indépendant de ces colonnes).
 - `ingredients` / `ingredient_categories` / `recipe_categories` / `units` — référentiels,
   lecture publique. `ingredients` a des policies INSERT/DELETE censées être ouvertes à
   tout authentifié (catalogue partagé, pas de notion de propriétaire — comme avant la
@@ -1078,6 +1085,69 @@ plus simple et plus sûr à maintenir que des upserts fins.
     du style pré-existant), `npm run test:rls` (aucune table concernée, resté vert),
     tour rejouée en conditions réelles (compte démo, scripts jetables) avec les 7
     nouvelles images et le nouveau texte.
+- **Plats simples & produits tout prêts** (demande explicite : parfois un repas n'est
+  pas lié à une recette — juste un libellé, ou un plat du commerce type Picard qui doit
+  quand même apparaître sur la liste de courses). Modélisés comme des **recettes
+  allégées** plutôt qu'un système parallèle : nouvelle colonne `recipes.dish_type`
+  (`'recipe'` par défaut / `'simple'` / `'ready_made'`) + `recipes.shopping_quantity_label`
+  (texte, utilisé seulement pour `ready_made`, ex. « 1 barquette »). Une recette sans
+  ingrédients/étapes dégradait déjà correctement partout (contrôle allergies, Plan de
+  prépa, `RecipeNamesList`) — aucun changement nécessaire à ces endroits, seul le
+  branchement d'un nouveau créateur rapide était à faire.
+  - **Création rapide** : dans `RecipeSelectionModal` (`src/components/recipeSelection.tsx`),
+    sous la barre de recherche, deux boutons « + Plat simple » / « + Produit tout prêt »
+    (désactivés tant que la recherche est vide) créent la recette allégée à partir du
+    texte tapé et la sélectionnent immédiatement dans le créneau en cours d'édition —
+    `handleAddRecipe` (`src/App.tsx`) a dû être modifié pour **retourner l'id** de la
+    recette créée (ne retournait rien avant). Prop `onAddRecipe` filetée à travers les 5
+    points d'entrée du sélecteur de recette (`DayPanel`, les 2 instances de
+    `CalendarView` — semaine et perso —, `QuickPlanModal`) ; **volontairement pas
+    branchée** dans `WeekTemplateEditor` (`src/components/templates.tsx`) pour cette
+    itération — création rapide non disponible depuis l'éditeur de modèle, ajout trivial
+    et isolé plus tard si besoin.
+  - **Liste de courses** : décision produit validée avec l'utilisateur — un produit tout
+    prêt ajoute une **ligne de texte libre directement sur `shopping_list_items`** (même
+    mécanisme que l'ajout manuel d'un article), **pas** rattaché au catalogue
+    `ingredients`, pour ne pas dépendre du bug connu et non corrigé sur ce dernier (voir
+    plus bas, GRANT SQL manquant). Quantité **fixe par occurrence du repas** (ex. « 1
+    barquette »), additionnée via le même `addQty`/dédoublonnage déjà utilisé pour les
+    ingrédients réels si le plat revient plusieurs fois dans la période — **pas**
+    recalculée selon les convives/appétit (un emballage n'est pas divisible par
+    portion, décision validée avec l'utilisateur). Implémenté dans
+    `handleGenerateShoppingList` (`src/App.tsx`) : une branche dédiée pour
+    `dish_type === "ready_made"` avant le calcul du multiplicateur de portions ; `simple`
+    n'a besoin d'aucune branche (`ingredients` vide → la boucle existante ne fait rien).
+  - **Distinction visuelle** : badge texte (`DISH_TYPES` dans `src/constants.ts`,
+    classes CSS `mp-badge-neutral`/`mp-badge-amber` déjà existantes) plutôt qu'une
+    nouvelle icône `CategoryIcon` — `Icon` (`src/components/ui.tsx`) ignore
+    silencieusement sa prop `color` quand elle n'est pas enveloppée dans un `<span>`
+    coloré (limitation déjà documentée plus haut pour les icônes de type de repas),
+    donc un badge texte est plus sûr. Affiché à côté du badge de catégorie habituel
+    (absent pour ces deux types) dans `RecipeRow` (sélecteur), `RecipeDetailModal`
+    (fiche détail) et `RecipesView` (grille + vue compacte) — pas sur les cartes du
+    calendrier elles-mêmes (espace trop réduit, à un clic de la fiche détail de toute
+    façon).
+  - **`RecipeModal`** (édition complète) : `dish_type` fixé une fois à la création
+    rapide, **non modifiable** ensuite via ce formulaire (évite un 3ᵉ sélecteur
+    confus dans un formulaire pensé pour une recette complète) — un champ « Quantité
+    pour la liste de courses » apparaît seulement si `dish_type === "ready_made"`.
+    Rien n'empêche d'enrichir ensuite un plat simple/produit tout prêt avec de vrais
+    ingrédients/étapes via ce même formulaire ; la logique liste de courses se base
+    sur `dish_type`, pas sur la présence d'ingrédients, donc pas d'effet de bord.
+  - **Migration** : `add_dish_type_to_recipes`, purement additive
+    (`dish_type not null default 'recipe'` + `shopping_quantity_label` nullable),
+    aucune policy RLS touchée — vérifié après coup que les policies existantes sur
+    `recipes` (`recipes_insert_owner`, `recipes_update_owner`, etc.) sont déjà
+    indépendantes de ces colonnes, contrairement au blocage connu sur `ingredients`.
+  - **Vérifié** : `npm run build`, `npm run typecheck` (parité), `npm run test:rls`
+    (17/17, vert). Bout en bout sur le compte démo **et** sur un compte réel
+    (`rls-test-a`, scripts Puppeteer jetables hors repo) : création des deux types
+    depuis le planning, badges corrects dans « Nos recettes », seul le produit tout
+    prêt ajoute une ligne à la liste de courses générée (quantité correcte, sommée
+    sur occurrences multiples), persistance confirmée après un rechargement complet
+    de page côté compte réel (round-trip Supabase, pas seulement l'état local
+    optimiste). Fixtures de test nettoyées après coup (recettes, créneaux de
+    planning, article de courses) — famille de test revenue à son état d'origine.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

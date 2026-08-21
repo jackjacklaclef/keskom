@@ -131,6 +131,7 @@ export const fetchRecipesForUser = async (): Promise<any[]> => {
     .select(`
       id, name, description, portions, tags, scope, owner_profile_id, family_id, variant_name,
       origin_country, prep_minutes, cook_minutes, photo_url, photo_attribution,
+      dish_type, shopping_quantity_label,
       recipe_categories(short_name),
       recipe_ingredients(ingredient_id, quantity_label, order_index, ingredients(name)),
       recipe_family_shares(family_id),
@@ -160,6 +161,8 @@ export const fetchRecipesForUser = async (): Promise<any[]> => {
       photoAttribution: r.photo_attribution || null,
       tags: r.tags || [],
       category: r.recipe_categories?.short_name,
+      dishType: r.dish_type || "recipe",
+      shoppingQuantityLabel: r.shopping_quantity_label || null,
       scope: r.scope,
       createdBy: r.owner_profile_id,
       familyId: r.family_id ? String(r.family_id) : null,

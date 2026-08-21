@@ -26,6 +26,14 @@ export const MEAL_BADGE_CLASS = {
   sage: "mp-badge-sage",
 };
 
+// Un plat simple (juste un titre) ou un produit tout prêt (article de commerce, pas de
+// recette derrière) sont des recettes "allégées" (dish_type sur `recipes`, défaut
+// "recipe") — pas d'entrée ici pour "recipe", son absence est le garde utilisé partout.
+export const DISH_TYPES = {
+  simple:     { label: "Plat simple",       badgeClass: "mp-badge-neutral" },
+  ready_made: { label: "Produit tout prêt", badgeClass: "mp-badge-amber" },
+};
+
 export const QUANTITY_UNITS = ["g", "kg", "L", "ml", "c. à soupe", "c. à café", "pièce", "autre"];
 
 export const RECIPE_CATEGORIES = [

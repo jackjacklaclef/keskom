@@ -30,7 +30,12 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
   recettes privées ou partagées au sein d'une famille, variantes d'une recette
   existante, étapes numérotées avec minuteur et photo, mode « Cuisine » pas-à-pas.
   Pays d'origine et temps de préparation/cuisson affichés sur chaque recette, photo du
-  plat pour une partie du catalogue partagé. Recherche par nom ou par tag.
+  plat pour une partie du catalogue partagé. Recherche par nom ou par tag. Un repas
+  n'a pas toujours de vraie recette derrière : depuis le sélecteur de recette du
+  planning, on peut créer à la volée un **plat simple** (juste un titre, ex. « Restes
+  d'hier soir ») ou un **produit tout prêt** (ex. une marque de plats surgelés) qui
+  ajoute automatiquement l'article correspondant à la liste de courses générée. Les
+  deux sont réutilisables ensuite comme n'importe quelle recette.
 - **Liste de courses** — générée automatiquement à partir du planning sur une période
   donnée, en tenant compte du nombre de portions de chaque recette et de l'appétit de
   chaque convive.

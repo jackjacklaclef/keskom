@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 
 import { colors, space, radius } from "../theme";
-import { RECIPE_CATEGORIES, QUANTITY_UNITS, ingredientCategories } from "../constants";
+import { RECIPE_CATEGORIES, QUANTITY_UNITS, ingredientCategories, DISH_TYPES } from "../constants";
 import { getSupabase } from "../lib/supabaseClient";
 import { Modal, ModalHeader, Field, Icon, CategoryIcon, CategoryDot, EmptyState } from "./ui";
 
@@ -29,6 +29,7 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
   const [prepMinutes, setPrepMinutes] = useState(recipe?.prepMinutes || "");
   const [cookMinutes, setCookMinutes] = useState(recipe?.cookMinutes || "");
   const [variantName, setVariantName] = useState(recipe?.variantName || "");
+  const [shoppingQuantityLabel, setShoppingQuantityLabel] = useState(recipe?.shoppingQuantityLabel || "1");
   const [description, setDescription] = useState(recipe?.description || "");
   const [showDescription, setShowDescription] = useState(!!(recipe?.description));
   const [showIngredients, setShowIngredients] = useState(!!(recipe?.ingredients?.length));
@@ -120,6 +121,8 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
       cookMinutes: cookMinutes !== "" ? Number(cookMinutes) : null,
       description: description.trim(), ingredients: recipeIngredients, tags, steps,
       parentId: recipe?.parentId || null, rootId: recipe?.rootId || null, variantName: variantName.trim() || null,
+      dishType: recipe?.dishType || "recipe",
+      shoppingQuantityLabel: recipe?.dishType === "ready_made" ? (shoppingQuantityLabel.trim() || "1") : null,
     });
   };
 
@@ -188,6 +191,15 @@ export const RecipeModal = ({ recipe, ingredients, onClose, onSave }) => {
           ))}
         </div>
       </Field>
+
+      {/* Quantité pour la liste de courses — uniquement pour un produit tout prêt
+          (fixée à la création rapide depuis le planning, éditable ensuite ici). */}
+      {recipe?.dishType === "ready_made" && (
+        <Field label="Quantité pour la liste de courses">
+          <input className="mp-input" value={shoppingQuantityLabel} onChange={(e) => setShoppingQuantityLabel(e.target.value)}
+            placeholder="Ex : 1 barquette" />
+        </Field>
+      )}
 
       {/* Pays d'origine + durées */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.9rem" }}>
@@ -566,6 +578,9 @@ export const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], curren
             <h2 className="mp-h2" style={{ marginBottom: "0.25rem" }}>{recipe.name}</h2>
             <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
               {cat && <span className="mp-badge" style={{ background: `${cat.hex}18`, color: cat.hex, border: `1px solid ${cat.hex}30` }}>{cat.label}</span>}
+              {!cat && recipe.dishType && recipe.dishType !== "recipe" && (
+                <span className={`mp-badge ${DISH_TYPES[recipe.dishType].badgeClass}`}>{DISH_TYPES[recipe.dishType].label}</span>
+              )}
               {recipe.variantName && <span className="mp-badge mp-badge-neutral" style={{ fontStyle: "italic" }}>{recipe.variantName}</span>}
               {recipe.parentId && <span className="mp-micro mp-text-faint">Variante</span>}
             </div>
@@ -657,6 +672,12 @@ export const RecipeDetailModal = ({ recipe, ingredients, allRecipes = [], curren
                 ))}
               </div>
             </div>
+          ) : recipe.dishType === "ready_made" ? (
+            <p className="mp-small mp-text-faint">
+              Produit tout prêt — ajouté à la liste de courses ({recipe.shoppingQuantityLabel || "1"}).
+            </p>
+          ) : recipe.dishType === "simple" ? (
+            <p className="mp-small mp-text-faint">Plat simple — pas d'ingrédients à détailler.</p>
           ) : (
             <p className="mp-small mp-text-faint">Aucun ingrédient renseigné.</p>
           )}
@@ -928,6 +949,11 @@ export const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingr
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", alignItems: "center", marginBottom: "0.3rem" }}>
                   {recipe.parentId && <span className="mp-badge mp-badge-sage" style={{ fontSize: "0.58rem" }}>Variante</span>}
                   {cat && <span className="mp-badge" style={{ background: `${cat.hex}18`, color: cat.hex, border: `1px solid ${cat.hex}30`, fontSize: "0.62rem", fontWeight: 600 }}>{cat.label}</span>}
+                  {!cat && recipe.dishType && recipe.dishType !== "recipe" && (
+                    <span className={`mp-badge ${DISH_TYPES[recipe.dishType].badgeClass}`} style={{ fontSize: "0.62rem", fontWeight: 600 }}>
+                      {DISH_TYPES[recipe.dishType].label}
+                    </span>
+                  )}
                   {recipe.tags.slice(0, 3).map((tag) => <span key={tag} className="mp-badge mp-badge-clay">{tag}</span>)}
                   {recipe.tags.length > 3 && <span className="mp-badge mp-badge-neutral">+{recipe.tags.length - 3}</span>}
                 </div>
@@ -986,6 +1012,11 @@ export const RecipesView = ({ recipes, allRecipes = [], globalRecipes = [], ingr
                   {cat && (
                     <span className="mp-badge" style={{ background: `${cat.hex}18`, color: cat.hex, border: `1px solid ${cat.hex}30`, fontSize: "0.6rem", fontWeight: 600 }}>
                       {cat.label}
+                    </span>
+                  )}
+                  {!cat && recipe.dishType && recipe.dishType !== "recipe" && (
+                    <span className={`mp-badge ${DISH_TYPES[recipe.dishType].badgeClass}`} style={{ fontSize: "0.6rem", fontWeight: 600 }}>
+                      {DISH_TYPES[recipe.dishType].label}
                     </span>
                   )}
                 </div>

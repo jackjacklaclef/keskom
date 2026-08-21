@@ -1,14 +1,17 @@
 import { useState, useMemo } from "react";
 
 import { space, radius } from "../theme";
-import { MEAL_TYPES, RECIPE_CATEGORIES } from "../constants";
+import { MEAL_TYPES, RECIPE_CATEGORIES, DISH_TYPES } from "../constants";
 import { Modal, ModalHeader, Icon, CategoryIcon, EmptyState } from "./ui";
 
-export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, onSave, onSaveStatus, recentRecipeIds = [], familyMembers = [] }) => {
+export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, onSave, onSaveStatus, onAddRecipe, recentRecipeIds = [], familyMembers = [] }) => {
   const [selected, setSelected] = useState(meal?.recipeIds || []);
   const [status, setStatus] = useState(meal?.status || "normal");
   const [filterCat, setFilterCat] = useState(null);
   const [search, setSearch] = useState("");
+  const [creatingReadyMade, setCreatingReadyMade] = useState(false);
+  const [readyMadeQty, setReadyMadeQty] = useState("1");
+  const [creatingBusy, setCreatingBusy] = useState(false);
   const allMemberIds = useMemo(() => familyMembers.filter((m) => m.memberId).map((m) => m.memberId), [familyMembers]);
   const [attendeeIds, setAttendeeIds] = useState(meal?.attendeeIds ?? allMemberIds);
   const [restaurantName, setRestaurantName] = useState(meal?.restaurantName || "");
@@ -28,6 +31,22 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
     } else {
       onSave(selected, attendeeIds, null, null);
     }
+  };
+
+  // Plat simple / produit tout prêt : créés à la volée comme une recette allégée
+  // (sans ingrédients/étapes), réutilisables ensuite comme n'importe quelle recette.
+  const createQuickDish = async (dishType, shoppingQuantityLabel) => {
+    const name = search.trim();
+    if (!name || !onAddRecipe || creatingBusy) return;
+    setCreatingBusy(true);
+    try {
+      const newId = await onAddRecipe({
+        name, dishType, category: null, ingredients: [], steps: [], tags: [],
+        shoppingQuantityLabel: dishType === "ready_made" ? (shoppingQuantityLabel.trim() || "1") : null,
+      });
+      if (newId) setSelected((prev) => [...prev, newId]);
+      setSearch(""); setCreatingReadyMade(false); setReadyMadeQty("1");
+    } finally { setCreatingBusy(false); }
   };
 
   const matches = (r) => {
@@ -59,6 +78,11 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
         {cat && (
           <span className="mp-badge" style={{ background: `${cat.hex}18`, color: cat.hex, border: `1px solid ${cat.hex}30`, fontSize: "0.58rem", fontWeight: 600, flexShrink: 0 }}>
             {cat.label}
+          </span>
+        )}
+        {!cat && recipe.dishType && recipe.dishType !== "recipe" && (
+          <span className={`mp-badge ${DISH_TYPES[recipe.dishType].badgeClass}`} style={{ fontSize: "0.58rem", fontWeight: 600, flexShrink: 0 }}>
+            {DISH_TYPES[recipe.dishType].label}
           </span>
         )}
       </label>
@@ -163,6 +187,38 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
         <input className="mp-input" style={{ paddingLeft: "1.8rem", fontSize: "0.85rem" }}
           value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher..." />
       </div>
+
+      {/* Plat simple / produit tout prêt — créés à la volée à partir du texte recherché,
+          pas besoin de la recette complète pour un repas sans recette derrière. */}
+      {onAddRecipe && (
+        <div style={{ marginBottom: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flex: 1, justifyContent: "center" }}
+              disabled={!search.trim() || creatingBusy}
+              title={!search.trim() ? "Tapez d'abord un nom" : undefined}
+              onClick={() => createQuickDish("simple")}>
+              <Icon name="plus" size={12} /> Plat simple
+            </button>
+            <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flex: 1, justifyContent: "center" }}
+              disabled={!search.trim() || creatingBusy}
+              title={!search.trim() ? "Tapez d'abord un nom" : undefined}
+              onClick={() => setCreatingReadyMade((v) => !v)}>
+              <Icon name="plus" size={12} /> Produit tout prêt
+            </button>
+          </div>
+          {creatingReadyMade && (
+            <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.4rem" }}>
+              <input className="mp-input" style={{ flex: 1, fontSize: "0.8rem" }}
+                value={readyMadeQty} onChange={(e) => setReadyMadeQty(e.target.value)}
+                placeholder="Quantité pour la liste de courses, ex : 1 barquette" />
+              <button type="button" className="mp-btn mp-btn-primary mp-btn-sm" disabled={creatingBusy}
+                onClick={() => createQuickDish("ready_made", readyMadeQty)}>
+                Créer
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filtres catégories */}
       {presentCats.length > 1 && (

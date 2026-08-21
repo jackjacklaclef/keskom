@@ -453,7 +453,7 @@ const DragHandle = ({ dateStr, type, meta, onDown, onMove, onUp, onCancel }) => 
 // Panneau de détail d'une journée — s'insère sous la ligne de semaine
 export const DayPanel = ({
   date, dateStr, mealPlans, recipes, recentRecipeIds,
-  weekTemplates, onAddMeal, onUpdateMeal, onClose,
+  weekTemplates, onAddMeal, onUpdateMeal, onClose, onAddRecipe,
   onDuplicateWeek, onApplyTemplate, showBreakfast = false, familyMembers = [], onSuggest,
   ingredients = [], familyAllergies = {},
 }) => {
@@ -638,6 +638,7 @@ export const DayPanel = ({
           onClose={() => setEditingSlot(null)}
           onSave={handleSaveSlot}
           onSaveStatus={handleSaveStatus}
+          onAddRecipe={onAddRecipe}
         />
       )}
 
@@ -681,7 +682,7 @@ const DRAG_THRESHOLD_PX = 6;
 // argile/sauge) reste le signal principal, l'icône renforce la lecture visuelle.
 const mealTypeIconName = (typeId) => typeId === "breakfast" ? "sunrise" : typeId === "dinner" ? "moon" : "cat-main";
 
-export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMoveMeal, recentRecipeIds = [], weekTemplates = [], onApplyTemplate, onDuplicateWeek, onClearWeek, onNavigate, familyMembers = [], ingredients = [], familyAllergies = {} }) => {
+export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMoveMeal, onAddRecipe, recentRecipeIds = [], weekTemplates = [], onApplyTemplate, onDuplicateWeek, onClearWeek, onNavigate, familyMembers = [], ingredients = [], familyAllergies = {} }) => {
   const [viewMode, setViewMode] = useState("week");
   // Drag and drop d'un créneau vers un autre (échange si la destination n'est pas vide) —
   // Pointer Events unifiés souris/tactile, déclenchés uniquement depuis <DragHandle>.
@@ -1266,6 +1267,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                   else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeIds, restaurantName, restaurantUrl });
                   setWeekEditingSlot(null);
                 }}
+                onAddRecipe={onAddRecipe}
               />
             )}
           </div>
@@ -1412,6 +1414,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                 onClose={() => setWeekEditingSlot(null)}
                 onSave={(recipeIds, attendeeIds, restaurantName, restaurantUrl) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, "normal", attendeeIds, restaurantName, restaurantUrl); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status: "normal", attendeeIds, restaurantName, restaurantUrl }); setWeekEditingSlot(null); }}
                 onSaveStatus={(status, recipeIds, attendeeIds, restaurantName, restaurantUrl) => { const meal = getMeal(weekEditingSlot.dateStr, weekEditingSlot.type); if (meal) onUpdateMeal(meal.id, recipeIds, status, attendeeIds, restaurantName, restaurantUrl); else onAddMeal({ date: weekEditingSlot.dateStr, type: weekEditingSlot.type, recipeIds, status, attendeeIds, restaurantName, restaurantUrl }); setWeekEditingSlot(null); }}
+                onAddRecipe={onAddRecipe}
               />
             )}
           </div>
@@ -1521,6 +1524,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                       weekTemplates={weekTemplates}
                       onAddMeal={onAddMeal}
                       onUpdateMeal={onUpdateMeal}
+                      onAddRecipe={onAddRecipe}
                       onClose={() => setSelectedDate(null)}
                       onDuplicateWeek={onDuplicateWeek}
                       onApplyTemplate={onApplyTemplate}
@@ -1568,7 +1572,7 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
   );
 };
 
-export const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave, familyMembers = [] }) => {
+export const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave, onAddRecipe, familyMembers = [] }) => {
   const [step, setStep] = useState(1); // 1 = date+type, 2 = recettes
   const [date, setDate] = useState(todayStr());
   const [mealType, setMealType] = useState("lunch");
@@ -1589,6 +1593,7 @@ export const QuickPlanModal = ({ recipes, recentRecipeIds, onClose, onSave, fami
         onClose={onClose}
         onSave={(recipeIds, attendeeIds, restaurantName, restaurantUrl) => { onSave({ date, type: mealType, recipeIds, status: "normal", attendeeIds, restaurantName, restaurantUrl }); onClose(); }}
         onSaveStatus={(status, recipeIds, attendeeIds, restaurantName, restaurantUrl) => { onSave({ date, type: mealType, recipeIds, status, attendeeIds, restaurantName, restaurantUrl }); onClose(); }}
+        onAddRecipe={onAddRecipe}
       />
     );
   }
