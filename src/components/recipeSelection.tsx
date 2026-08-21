@@ -264,7 +264,17 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
         )}
       </div>
 
-      <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end" }}>
+      {/* Sticky plutôt qu'en flux normal : cette modale a grossi (statuts, convives,
+          création rapide, filtres...) au point de dépasser 88vh sur beaucoup d'écrans —
+          sans ça, "Valider" défilait hors champ et demandait de scroller pour le
+          retrouver (retour utilisateur). Reste ancré au bas de la zone de défilement du
+          modal (.mp-modal, qui porte déjà overflow-y:auto) quel que soit le contenu
+          au-dessus. */}
+      <div style={{
+        display: "flex", gap: "0.6rem", justifyContent: "flex-end",
+        position: "sticky", bottom: 0, background: "var(--paper-raised)",
+        paddingTop: "0.75rem", marginTop: "0.75rem", borderTop: "1px solid var(--line)",
+      }}>
         <button type="button" className="mp-btn mp-btn-secondary" onClick={onClose}>Annuler</button>
         <button type="button" className="mp-btn mp-btn-primary" onClick={handleSave}>
           {status === "restaurant" ? "Restaurant" : status === "skip" ? "Pas de repas" : `Valider${selected.length > 0 ? ` (${selected.length})` : ""}`}

@@ -1163,6 +1163,18 @@ plus simple et plus sûr à maintenir que des upserts fins.
     « Valider » pour confirmer le repas », `src/components/recipeSelection.tsx`,
     état `justCreatedName`) qui s'affiche juste après la création rapide et se
     referme dès que l'utilisateur coche une recette ou modifie la recherche.
+  - **Retour utilisateur (même tour) : bouton « Valider » pas toujours visible, besoin
+    de scroller pour le retrouver** — la modale a grossi avec tout ce qui a été ajouté
+    ce tour-ci (statuts spéciaux, convives, création rapide, message de confirmation,
+    filtres...) au point de dépasser 88vh (hauteur max de `.mp-modal`,
+    `src/theme.tsx`) sur beaucoup d'écrans, et le pied de modale (Annuler/Valider)
+    défilait hors champ avec le reste. Corrigé en rendant ce pied `position: sticky;
+    bottom: 0` (scopé au style inline de `recipeSelection.tsx`, pas touché dans le
+    composant `Modal` partagé ni `theme.tsx`, pour ne pas affecter les ~10 autres
+    modales de l'app qui n'ont pas ce problème) — reste ancré au bas de la zone de
+    défilement (`.mp-modal`, qui porte déjà `overflow-y:auto`) quel que soit le
+    contenu au-dessus, avec un fond opaque et une bordure supérieure pour rester
+    lisible par-dessus la liste de recettes qui défile derrière.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
