@@ -12,13 +12,14 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
   const [creatingReadyMade, setCreatingReadyMade] = useState(false);
   const [readyMadeQty, setReadyMadeQty] = useState("1");
   const [creatingBusy, setCreatingBusy] = useState(false);
+  const [justCreatedName, setJustCreatedName] = useState(null);
   const allMemberIds = useMemo(() => familyMembers.filter((m) => m.memberId).map((m) => m.memberId), [familyMembers]);
   const [attendeeIds, setAttendeeIds] = useState(meal?.attendeeIds ?? allMemberIds);
   const [restaurantName, setRestaurantName] = useState(meal?.restaurantName || "");
   const [restaurantUrl, setRestaurantUrl] = useState(meal?.restaurantUrl || "");
   const typeLabel = MEAL_TYPES.find((t) => t.id === mealType)?.label || mealType;
 
-  const toggle = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggle = (id) => { setJustCreatedName(null); setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])); };
   const toggleAttendee = (memberId) => setAttendeeIds((prev) => prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]);
   const allAttending = allMemberIds.length > 0 && allMemberIds.every((id) => attendeeIds.includes(id));
   const toggleAllAttendees = () => setAttendeeIds(allAttending ? [] : allMemberIds);
@@ -44,7 +45,7 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
         name, dishType, category: null, ingredients: [], steps: [], tags: [],
         shoppingQuantityLabel: dishType === "ready_made" ? (shoppingQuantityLabel.trim() || "1") : null,
       });
-      if (newId) setSelected((prev) => [...prev, newId]);
+      if (newId) { setSelected((prev) => [...prev, newId]); setJustCreatedName(name); }
       setSearch(""); setCreatingReadyMade(false); setReadyMadeQty("1");
     } finally { setCreatingBusy(false); }
   };
@@ -185,8 +186,19 @@ export const RecipeSelectionModal = ({ recipes, meal, mealType, date, onClose, o
           <Icon name="search" size={13} />
         </span>
         <input className="mp-input" style={{ paddingLeft: "1.8rem", fontSize: "0.85rem" }}
-          value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher..." />
+          value={search} onChange={(e) => { setSearch(e.target.value); setJustCreatedName(null); }} placeholder="Rechercher..." />
       </div>
+
+      {/* Confirmation explicite après création rapide : la recette est créée et ajoutée à
+          la sélection, mais le repas lui-même n'est pas encore enregistré — sans ce message,
+          le bouton "Valider" passant instantanément à "Valider (N)" pouvait se lire comme
+          une confirmation d'enregistrement déjà faite (retour utilisateur). */}
+      {justCreatedName && (
+        <p className="mp-small" style={{ color: "var(--sage)", marginBottom: "0.6rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+          <Icon name="check" size={13} />
+          « {justCreatedName} » créé et ajouté à la sélection — cliquez sur « Valider » pour confirmer le repas.
+        </p>
+      )}
 
       {/* Plat simple / produit tout prêt — créés à la volée à partir du texte recherché,
           pas besoin de la recette complète pour un repas sans recette derrière. */}

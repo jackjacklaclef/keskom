@@ -1148,6 +1148,21 @@ plus simple et plus sûr à maintenir que des upserts fins.
     de page côté compte réel (round-trip Supabase, pas seulement l'état local
     optimiste). Fixtures de test nettoyées après coup (recettes, créneaux de
     planning, article de courses) — famille de test revenue à son état d'origine.
+  - **Retour utilisateur (tour suivant) : « Créer se comporte comme Valider »** —
+    signalement initial (avec capture d'écran) laissant penser que cliquer « Créer »
+    enregistrait déjà le repas. Reproduit en direct sur la production
+    (`keskonm.vercel.app`, compte de test réel) pour vérifier avant de conclure à un
+    bug : **pas de bug fonctionnel** — la case du calendrier reste bien vide
+    (`+ Ajouter`) juste après avoir cliqué « Créer », `Valider` reste nécessaire.
+    Cause réelle, purement UX : cliquer « Créer » fait immédiatement passer le bouton
+    `Valider` à `Valider (1)` (même comportement que cocher une recette existante,
+    déjà standard dans cette modale) — mais un bouton « Créer » qui déclenche une
+    vraie écriture réseau se lit plus facilement comme une action déjà terminée
+    qu'une simple case à cocher. Corrigé en ajoutant un message de confirmation
+    explicite et transitoire (« « Nom » créé et ajouté à la sélection — cliquez sur
+    « Valider » pour confirmer le repas », `src/components/recipeSelection.tsx`,
+    état `justCreatedName`) qui s'affiche juste après la création rapide et se
+    referme dès que l'utilisateur coche une recette ou modifie la recherche.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
