@@ -5,6 +5,7 @@ import { APPETITE_LEVELS, STORAGE_KEYS } from "./constants";
 import type { AppUser } from "./types";
 
 import { Icon, useToast, Toast } from "./components/ui";
+import { UpdatePrompt } from "./components/updatePrompt";
 import { Sidebar } from "./components/layout";
 import { CalendarView, QuickPlanModal } from "./components/calendar";
 import { RecipesView } from "./components/recipes";
@@ -1251,6 +1252,7 @@ const App = () => {
   return (
     <div className={`mp-root${darkMode ? " dark" : ""}`}>
       <GlobalStyle />
+      <UpdatePrompt />
 
       {/* Auth */}
       {!currentUser && authScreen === "login" && <LoginView onLogin={handleLogin} onGoRegister={() => setAuthScreen("register")} onGoForgot={() => setAuthScreen("forgot")} />}

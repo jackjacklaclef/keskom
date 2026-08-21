@@ -23,7 +23,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' plutôt que 'autoUpdate' : un nouveau build ne doit pas remplacer
+      // silencieusement le service worker sous les pieds d'un onglet ouvert (perte
+      // d'état en cours) — on affiche plutôt un bandeau (UpdatePrompt) qui laisse
+      // l'utilisateur choisir le moment de recharger.
+      registerType: 'prompt',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png'],
       manifest: {
         name: 'Keskom',

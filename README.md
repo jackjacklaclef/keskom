@@ -49,6 +49,9 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
 - **Visite guidée** — petit tour du propriétaire à la première connexion, un écran par
   module ; rejouable à tout moment depuis Mon compte.
 - **Compte démo** — utilisable sans backend, entièrement en local (voir plus bas).
+- **Bandeau de mise à jour** — un bandeau apparaît en haut de l'écran quand une nouvelle
+  version de l'app a été déployée pendant que l'onglet était ouvert (« Actualiser »
+  applique la mise à jour et recharge, « Plus tard » la reporte).
 
 ## Démarrer en local
 

@@ -365,6 +365,31 @@ export const GlobalStyle = () => (
     .mp-toast-sage { background: var(--sage); }
     .mp-toast-berry { background: var(--berry); }
 
+    /* ---- Bandeau de nouvelle version (PWA) ---- */
+    @keyframes mp-update-in {
+      from { opacity: 0; transform: translate(-50%, -8px); }
+      to   { opacity: 1; transform: translate(-50%, 0); }
+    }
+    .mp-update-banner {
+      position: fixed;
+      top: 0.75rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1300;
+      background: var(--ink);
+      color: var(--paper);
+      padding: 0.6rem 0.75rem 0.6rem 1rem;
+      border-radius: ${radius.md};
+      font-size: 0.82rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+      max-width: calc(100vw - 2rem);
+      animation: mp-update-in 220ms ease forwards;
+    }
+
     /* ---- FAB (mobile only) ---- */
     .mp-fab {
       position: fixed;

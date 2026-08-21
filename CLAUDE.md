@@ -113,6 +113,9 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
 - Version affichée dans le footer de la sidebar = sha git court, injecté au build via
   `vite.config.ts` (`__APP_VERSION__`).
 - PWA (`vite-plugin-pwa`) : manifest + service worker générés au build (`generateSW`).
+  `registerType: 'prompt'` (pas `'autoUpdate'`) : un nouveau déploiement ne remplace pas
+  silencieusement le service worker d'un onglet resté ouvert (perte d'état en cours) —
+  voir `UpdatePrompt` ci-dessous, qui affiche un bandeau plutôt que de recharger seul.
 - Synchronisation temps réel via **Supabase Realtime** (`postgres_changes`) sur les
   recettes (`recipes`, `recipe_ingredients`, `recipe_steps`, `recipe_family_shares`,
   `recipe_variants`) et sur le planning (`meal_plans` filtré par famille active,
@@ -1175,6 +1178,52 @@ plus simple et plus sûr à maintenir que des upserts fins.
     défilement (`.mp-modal`, qui porte déjà `overflow-y:auto`) quel que soit le
     contenu au-dessus, avec un fond opaque et une bordure supérieure pour rester
     lisible par-dessus la liste de recettes qui défile derrière.
+- **Bandeau « nouvelle version disponible »** (demande explicite : prévenir quand la
+  version affichée diverge de la dernière version déployée, pattern classique pour une
+  PWA). Décision d'architecture : `vite.config.ts` bascule `registerType` de
+  `'autoUpdate'` à **`'prompt'`** — avec `autoUpdate`, `vite-plugin-pwa` remplace le
+  service worker et recharge la page **silencieusement** dès qu'un nouveau déploiement
+  est détecté, ce qui peut faire perdre l'état en cours (formulaire à moitié rempli,
+  modale ouverte) sans prévenir ; `prompt` laisse l'app décider *quand* et *comment* le
+  signaler, ici via un bandeau plutôt qu'un rechargement forcé.
+  - **`src/components/updatePrompt.tsx`** (nouveau) : utilise le hook officiel
+    `useRegisterSW` de `virtual:pwa-register/react` (type déclaré via
+    `/// <reference types="vite-plugin-pwa/react" />` dans `src/vite-env.d.ts`) plutôt
+    que de ré-implémenter la détection à la main (comparer `__APP_VERSION__` à une
+    valeur re-fetchée aurait dupliqué une logique déjà fournie par l'outillage PWA, et
+    se serait heurté aux mêmes subtilités de cycle de vie du service worker).
+    `onNeedRefresh` (déclenché quand un nouveau service worker termine son
+    installation et attend) affiche le bandeau ; `updateServiceWorker(true)` (bouton
+    « Actualiser ») active ce nouveau worker puis recharge la page. Un
+    `setInterval` de 1h dans `onRegisteredSW` appelle `registration.update()` — sans
+    ça, un onglet resté ouvert très longtemps ne revérifierait jamais lui-même
+    l'existence d'un nouveau déploiement (le navigateur ne vérifie nativement qu'à la
+    navigation). Monté sans condition dans `App.tsx` (juste après `<GlobalStyle />`),
+    donc visible même sur l'écran de connexion.
+  - **Nouveau composant CSS** `.mp-update-banner` (`src/theme.tsx`, à côté de
+    `.mp-toast`) : bandeau fixe en haut d'écran plutôt qu'en bas comme les toasts
+    (évite tout chevauchement avec le FAB mobile et les toasts de confirmation
+    existants), persistant (pas d'auto-dismiss comme `Toast`, `useToast` — la
+    notification doit rester tant qu'elle n'est pas traitée). Bouton « Plus tard »
+    ferme le bandeau sans mettre à jour (état local `needRefresh` remis à `false` ;
+    réapparaît à la prochaine vérification si l'utilisateur ne recharge jamais).
+    Nouvelle icône `refresh` ajoutée à `src/components/ui.tsx` (flèche circulaire).
+  - **Vérifié en conditions quasi réelles** (`npm run build` + `npm run preview`,
+    scripts CDP jetables hors repo — `npm run dev` ne convient pas ici, Vite HMR ne
+    passe pas par le service worker) : suivre le déploiement d'un nouveau build sur un
+    onglet déjà chargé fait bien apparaître le bandeau (`registration.waiting`
+    devient `true`, `onNeedRefresh` se déclenche), cliquer « Actualiser » déclenche un
+    vrai rechargement (`performance.getEntriesByType("navigation")[0].type ===
+    "reload"`, confirmé), après lequel le bandeau disparaît et `registration.waiting`
+    repasse à `false`. Piège rencontré en testant : le tout premier chargement d'un
+    onglet n'est jamais contrôlé par le service worker (`navigator.serviceWorker.
+    controller` reste `null` tant que l'onglet n'a pas été rechargé au moins une fois
+    après la toute première installation — comportement standard, pas de
+    `clients.claim()` dans le SW généré) ; sans un rechargement initial dans le script
+    de test pour établir cette base réaliste, la séquence de mise à jour simulée
+    produisait des états incohérents (`registration.waiting` jamais observé à `true`
+    malgré le bandeau affiché) qui ont d'abord semblé indiquer un bug avant d'être
+    identifiés comme un artefact du protocole de test, pas de l'application elle-même.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
