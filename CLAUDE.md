@@ -419,17 +419,20 @@ plus simple et plus sûr à maintenir que des upserts fins.
   reprendre avec `familyAllergies` (voir plus bas) le jour où quelqu'un veut que
   « Suggérer » respecte vraiment les allergies ; le volet dislikes resterait lui à
   faire (pas d'équivalent `get_family_dislikes` pour l'instant).
-- **INSERT sur `ingredients` refusé pour un utilisateur authentifié normal**, malgré la
-  policy censée l'autoriser (voir section Schéma Supabase ci-dessus) — repéré en testant
-  l'accès en écriture avant un chantier de refonte du catalogue de recettes. Erreur
-  exacte : `permission denied for table ingredients`, avec le hint Postgres
-  `GRANT INSERT ON public.ingredients TO authenticated`. Ça ressemble à un GRANT SQL
-  manquant sur la table elle-même (indépendant de la policy RLS — en RLS+Postgres il
-  faut les deux : le GRANT au niveau table ET une policy qui laisse passer la ligne).
-  Concrètement, `handleAddIngredient` (`src/App.tsx`, écran Ingrédients) échoue pour
-  n'importe quel compte réel aujourd'hui. Pas corrigé — nécessite une migration
-  (`GRANT INSERT ON public.ingredients TO authenticated;`), donc un accès DB en
-  écriture (MCP Supabase ou clé service-role), non disponible au moment du repérage.
+- **INSERT et DELETE sur `ingredients` refusés pour un utilisateur authentifié normal**,
+  malgré des policies RLS censées les autoriser (`ingredients_insert_authenticated`,
+  `ingredients_delete_authenticated`, toutes deux `qual/with_check = true`) — confirmé
+  précisément via `information_schema.role_table_grants` : le rôle `authenticated` n'a
+  **que `SELECT`** sur `public.ingredients`, ni `INSERT` ni `DELETE` ne lui sont
+  accordés au niveau table (indépendant de la policy RLS — en RLS+Postgres il faut les
+  deux : le GRANT au niveau table ET une policy qui laisse passer la ligne). Repéré une
+  première fois en testant l'accès en écriture (erreur `permission denied for table
+  ingredients`, hint `GRANT INSERT ON public.ingredients TO authenticated`) ; requête
+  ci-dessus utilisée ensuite pour confirmer que le DELETE est logé à la même enseigne
+  (pas seulement l'INSERT, comme on le pensait initialement). **Toujours pas corrigé au
+  niveau du GRANT lui-même** — voir plus bas ("Catalogue d'ingrédients rendu en lecture
+  seule...") pour l'atténuation côté UI appliquée en attendant, et pourquoi le GRANT n'a
+  délibérément pas été posé tel quel.
 
 ## Fonctionnalités ajoutées pendant la migration
 
@@ -1224,6 +1227,33 @@ plus simple et plus sûr à maintenir que des upserts fins.
     produisait des états incohérents (`registration.waiting` jamais observé à `true`
     malgré le bandeau affiché) qui ont d'abord semblé indiquer un bug avant d'être
     identifiés comme un artefact du protocole de test, pas de l'application elle-même.
+- **Catalogue d'ingrédients rendu en lecture seule pour un compte réel** (demande
+  explicite, après confirmation que le catalogue est bien pensé comme global/partagé
+  entre tous les comptes — voir schéma) — plutôt que de simplement poser le GRANT SQL
+  manquant (`GRANT INSERT/DELETE ON public.ingredients TO authenticated`) pour faire
+  fonctionner l'ajout/suppression tels quels, décision explicite de l'utilisateur de
+  **ne pas rouvrir cette capacité en l'état** : un catalogue global où n'importe quel
+  compte peut librement ajouter/supprimer des lignes qui affectent tous les autres
+  comptes (allergies, recettes de tout le monde) est jugé fragile comme modèle final.
+  Deux pistes proposées, la seconde jugée cible mais nécessitant une étude d'impact
+  avant chantier (schéma `scope`/`owner`, RLS, tous les points de lecture du catalogue —
+  pickers d'allergie/dislike, sélecteur d'ingrédient de `RecipeModal`, regroupement par
+  catégorie de la liste de courses...) : catalogue 100% public en lecture seule (retenu
+  pour l'instant), ou plus tard un vrai découpage public/privé par utilisateur ou
+  famille (non implémenté, écarté de ce tour délibérément).
+  - **`src/components/ingredients.tsx`** : nouvelle prop `canEdit` (défaut `false`,
+    volontairement — un appelant qui oublierait de la passer retombe sur l'état sûr
+    plutôt que sur l'état actuellement cassé). Masque le bouton « Nouvel ingrédient »,
+    le formulaire d'ajout et le bouton de suppression sur chaque carte quand `false` ;
+    affiche à la place une note explicite (« Catalogue partagé par tous les comptes —
+    en lecture seule pour le moment. »). Recherche/filtrage par catégorie inchangés.
+  - **`src/App.tsx`** : `viewProps.ingredients` passe `canEdit: isDemo` — seul le
+    compte démo (100% local, sans lien avec le GRANT Supabase manquant) garde
+    add/suppression fonctionnels, exactement comme avant.
+  - **Vérifié** : `npm run build`/`typecheck`/`test:rls` inchangés, et en conditions
+    réelles (scripts CDP jetables) — compte démo : bouton d'ajout toujours présent,
+    aucune note affichée ; compte réel (`rls-test-a`) : bouton et croix de suppression
+    absents, note affichée, recherche/catégories toujours utilisables.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
