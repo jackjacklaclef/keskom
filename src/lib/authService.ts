@@ -1,7 +1,16 @@
+import { Capacitor } from "@capacitor/core";
+
 import type { AppUser, AuthResult, AuthChangeCallback } from "../types";
 import { STORAGE_KEYS } from "../constants";
 import { getSupabase } from "./supabaseClient";
 import { loadFromStorage, saveToStorage, DEMO_USER, DEMO_PASSWORD } from "./storage";
+
+// Dans l'app native (Capacitor), window.location.origin n'a aucun sens (pas de vrai
+// "origin" web) — le lien de l'email de reset doit pointer vers l'app web déployée,
+// s'ouvrira dans le navigateur externe plutôt que dans la coquille native.
+const RESET_PASSWORD_REDIRECT = Capacitor.isNativePlatform()
+  ? "https://keskonm.vercel.app?reset=true"
+  : `${window.location.origin}?reset=true`;
 
 // ============================================================
 // AUTH SERVICE — swappable localStorage ↔ Supabase
@@ -278,7 +287,7 @@ export const AuthService = (() => {
       const sb = await getSupabase();
       if (!sb) return { error: "Client Supabase non initialisé." };
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}?reset=true`,
+        redirectTo: RESET_PASSWORD_REDIRECT,
       });
       return { error: error?.message || null };
     },

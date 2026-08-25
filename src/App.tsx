@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Capacitor } from "@capacitor/core";
 
 import { GlobalStyle } from "./theme";
 import { APPETITE_LEVELS, STORAGE_KEYS } from "./constants";
@@ -1252,7 +1253,7 @@ const App = () => {
   return (
     <div className={`mp-root${darkMode ? " dark" : ""}`}>
       <GlobalStyle />
-      <UpdatePrompt />
+      {!Capacitor.isNativePlatform() && <UpdatePrompt />}
 
       {/* Auth */}
       {!currentUser && authScreen === "login" && <LoginView onLogin={handleLogin} onGoRegister={() => setAuthScreen("register")} onGoForgot={() => setAuthScreen("forgot")} />}
