@@ -7,6 +7,7 @@ import { todayStr, getMondayOf } from "../lib/dateUtils";
 import { Icon, Modal, ModalHeader, Field, CategoryIcon } from "./ui";
 import { RecipeSelectionModal } from "./recipeSelection";
 import { RecipeDetailModal } from "./recipes";
+import { TemplateGrid } from "./templates";
 
 // Conflits allergène pour un repas : recoupe les ingrédients des recettes assignées
 // avec les allergies des présents (familyAllergies: { [memberId]: [{type, id}] }).
@@ -287,6 +288,93 @@ export const DuplicateWeekModal = ({ dateStr, mealPlans, onClose, onDuplicate })
           onClick={() => { onDuplicate(dateStr, targetMonday.toISOString().split("T")[0]); onClose(); }}
         >
           Dupliquer
+        </button>
+      </div>
+    </Modal>
+  );
+};
+
+// Modale d'enregistrement de la semaine affichée comme nouveau modèle — reprend les
+// repas réels de la semaine (comme WeekTemplateEditor.handleSubmit) plutôt que de
+// repartir d'une grille vide.
+export const SaveWeekAsTemplateModal = ({ dateStr, mealPlans, recipes, activeFamily, onClose, onSave }) => {
+  const [name, setName] = useState("Nouveau modèle");
+  const [scope, setScope] = useState(activeFamily ? "family" : "user");
+
+  const monday = getMondayOf(new Date(dateStr + "T12:00:00"));
+
+  const slots = useMemo(() => {
+    const result = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const ds = d.toISOString().split("T")[0];
+      for (const type of MEAL_TYPES) {
+        const meal = mealPlans.find((mp) => mp.date === ds && mp.type === type.id);
+        if (!meal) continue;
+        const recipeIds = meal.recipeIds || [];
+        const status = meal.status || "normal";
+        if (status === "normal" && recipeIds.length === 0) continue;
+        result.push({ day: i, type: type.id, recipeIds, status });
+      }
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateStr, mealPlans]);
+
+  const handleSubmit = () => {
+    if (!name.trim() || slots.length === 0) return;
+    onSave({
+      id: Date.now().toString(),
+      name: name.trim(),
+      scope,
+      familyId: scope === "family" ? activeFamily?.id : undefined,
+      slots,
+    });
+  };
+
+  return (
+    <Modal onClose={onClose} width="620px">
+      <ModalHeader title="Enregistrer comme modèle" onClose={onClose} />
+      <p className="mp-small mp-text-soft" style={{ marginBottom: space.md }}>
+        Semaine du {monday.toISOString().split("T")[0]} — {slots.length} créneau{slots.length > 1 ? "x" : ""} planifié{slots.length > 1 ? "s" : ""}
+      </p>
+
+      {slots.length === 0 ? (
+        <p className="mp-small" style={{ color: "var(--amber)", marginBottom: space.lg }}>
+          Cette semaine ne contient aucun repas planifié — rien à enregistrer.
+        </p>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap", marginBottom: space.md, alignItems: "flex-end" }}>
+            <div style={{ flex: "1 1 200px" }}>
+              <span className="mp-label">Nom du modèle</span>
+              <input className="mp-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Semaine classique" />
+            </div>
+            {activeFamily && (
+              <div style={{ flex: "1 1 160px" }}>
+                <span className="mp-label">Visibilité</span>
+                <select className="mp-select" value={scope} onChange={(e) => setScope(e.target.value)}>
+                  <option value="family">Famille ({activeFamily.name})</option>
+                  <option value="user">Personnel (moi uniquement)</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          <TemplateGrid slots={slots} recipes={recipes} onCellClick={() => {}} readOnly />
+        </>
+      )}
+
+      <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end", marginTop: space.lg }}>
+        <button type="button" className="mp-btn mp-btn-secondary" onClick={onClose}>Annuler</button>
+        <button
+          type="button"
+          className="mp-btn mp-btn-primary"
+          disabled={!name.trim() || slots.length === 0}
+          onClick={handleSubmit}
+        >
+          Enregistrer
         </button>
       </div>
     </Modal>
@@ -682,7 +770,7 @@ const DRAG_THRESHOLD_PX = 6;
 // argile/sauge) reste le signal principal, l'icône renforce la lecture visuelle.
 const mealTypeIconName = (typeId) => typeId === "breakfast" ? "sunrise" : typeId === "dinner" ? "moon" : "cat-main";
 
-export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMoveMeal, onAddRecipe, recentRecipeIds = [], weekTemplates = [], onApplyTemplate, onDuplicateWeek, onClearWeek, onNavigate, familyMembers = [], ingredients = [], familyAllergies = {} }) => {
+export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMoveMeal, onAddRecipe, recentRecipeIds = [], weekTemplates = [], onApplyTemplate, onSaveTemplate, onDuplicateWeek, onClearWeek, onNavigate, familyMembers = [], ingredients = [], familyAllergies = {}, activeFamily = null }) => {
   const [viewMode, setViewMode] = useState("week");
   // Drag and drop d'un créneau vers un autre (échange si la destination n'est pas vide) —
   // Pointer Events unifiés souris/tactile, déclenchés uniquement depuis <DragHandle>.
@@ -1017,6 +1105,12 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                   <Icon name="copy" size={13} /> Dupliquer
                 </button>
 
+                {/* Enregistrer comme modèle */}
+                <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" style={{ flexShrink: 0 }}
+                  onClick={() => { setWeekActionDate(weekDateStr); setWeekActionType("save-as-template"); }}>
+                  <Icon name="bookmark" size={13} /> Enregistrer comme modèle
+                </button>
+
                 {/* Modèle — hors du scroll pour que le dropdown ne soit pas coupé */}
                 <div style={{ position: "relative", flexShrink: 0 }}>
                   <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm"
@@ -1228,6 +1322,20 @@ export const CalendarView = ({ mealPlans, recipes, onAddMeal, onUpdateMeal, onMo
                 onClose={() => { setWeekActionType(null); setWeekActionDate(null); }}
                 onClear={() => {
                   onClearWeek(weekActionDate);
+                  setWeekActionType(null); setWeekActionDate(null);
+                }}
+              />
+            )}
+
+            {weekActionType === "save-as-template" && weekActionDate && (
+              <SaveWeekAsTemplateModal
+                dateStr={weekActionDate}
+                mealPlans={mealPlans}
+                recipes={recipes}
+                activeFamily={activeFamily}
+                onClose={() => { setWeekActionType(null); setWeekActionDate(null); }}
+                onSave={(tpl) => {
+                  onSaveTemplate(tpl);
                   setWeekActionType(null); setWeekActionDate(null);
                 }}
               />

@@ -96,6 +96,7 @@ export const Icon = ({ name, size = 16 }) => {
     "map-pin": <><path d="M12 21s-7-6.5-7-11.5a7 7 0 1 1 14 0C19 14.5 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.3"/></>,
     // Flèche circulaire — nouvelle version disponible / actualiser
     refresh: <><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></>,
+    bookmark: <path d="M6 3h12v18l-6-4-6 4V3Z" />,
   };
   return (
     <svg {...common} aria-hidden="true" style={{ flexShrink: 0 }}>

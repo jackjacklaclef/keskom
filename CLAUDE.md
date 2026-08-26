@@ -33,7 +33,7 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
       storage.ts                656  localStorage + démo + jeu de données mock
       dateUtils.ts               23  todayStr/getMondayOf/dateOfSlot
     components/
-      ui.tsx                    416  primitives UI génériques
+      ui.tsx                    419  primitives UI génériques
       layout.tsx                216  Sidebar/MobileDrawer/FamilySelector
       auth.tsx                  370  écrans de connexion/inscription
       privacy.tsx                55  politique de confidentialité
@@ -45,7 +45,7 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
       onboarding.tsx            141  visite guidée (OnboardingTour)
       recipeSelection.tsx       207  sélecteur de recette pour un créneau
       recipes.tsx               915  CRUD recettes, mode cuisine
-      calendar.tsx             1633  planning (jour/semaine/mois)
+      calendar.tsx             1746  planning (jour/semaine/mois)
     assets/
       onboarding/                 7  captures d'écran utilisées par la visite guidée
   ```
@@ -1305,6 +1305,44 @@ plus simple et plus sûr à maintenir que des upserts fins.
     déjà existantes (`is_family_member`, `owns_recipe`...), rien de nouveau. Compte
     démo revérifié en conditions réelles (scripts jetables) : chemin 100% local
     inchangé, ajout/suppression toujours fonctionnels sans notion de scope.
+- **Enregistrer directement une semaine réelle du planning comme modèle** (demande
+  explicite) — jusqu'ici, un modèle (`week_templates`) ne pouvait être créé que depuis
+  l'écran **Modèles** en composant la grille case par case (`WeekTemplateEditor`) ;
+  l'entrée « Créer un modèle » du dropdown « Modèle » de la vue Semaine se contentait
+  de naviguer vers cet écran vide, sans reprendre le contenu de la semaine affichée.
+  Nouveau bouton **« Enregistrer comme modèle »** dans la barre d'actions de la vue
+  Semaine (`src/components/calendar.tsx`, à côté de Dupliquer/Modèle/Vider — vue
+  Semaine uniquement, comme ces trois actions ; la vue Perso a une barre d'actions
+  visuellement identique mais dont les modales d'action semaine ne sont, en l'état,
+  rendues que depuis le bloc `viewMode === "week"` — limitation préexistante, non liée
+  à ce chantier, pas corrigée ici car hors périmètre de la demande).
+  - **Nouveau composant `SaveWeekAsTemplateModal`** (`calendar.tsx`, à côté de
+    `DuplicateWeekModal`) : reconstruit les `slots` à partir des repas réels de la
+    semaine affichée (mêmes règles que `WeekTemplateEditor.handleCellSave` — un
+    créneau vide, `status "normal"` sans recette, n'est pas inclus), affiche un aperçu
+    en lecture seule via `TemplateGrid` (réutilisé depuis `templates.tsx`, aucune
+    dépendance circulaire), demande juste un nom + une visibilité (famille/perso).
+    Soumission déléguée telle quelle à `handleSaveTemplate` (`App.tsx`, inchangé) —
+    accepte déjà exactement la forme `{id, name, scope, familyId, slots}` produite par
+    `WeekTemplateEditor.handleSubmit`, aucune modification de `dataLayer.ts` ni du
+    schéma Supabase nécessaire (table `week_templates` confirmée inchangée via
+    `list_tables`).
+  - Modale volontairement plus large (`620px` vs. `480px`/`380px` des autres modales
+    semaine) : `TemplateGrid` a un `minWidth` interne de 560px pour ses 7 colonnes,
+    une largeur trop étroite aurait forcé un défilement horizontal évitable sur
+    desktop pour voir Sam/Dim (le défilement reste normal et inchangé sur mobile,
+    comportement déjà intégré à `TemplateGrid` pour les écrans étroits).
+  - Nouvelle icône `bookmark` ajoutée à `src/components/ui.tsx` (même convention que
+    les icônes ajoutées au fil des sessions précédentes).
+  - **Vérifié** : `npm run build`/`typecheck` en parité (delta d'erreurs limité au
+    même style `useState`/paramètres implicitement `any` déjà omniprésent sur chaque
+    site d'appel `setWeekActionType(...)` existant, aucune nouvelle catégorie
+    d'erreur). En conditions réelles (compte démo, scripts Playwright jetables hors
+    repo, chromium pré-installé de l'environnement) : bouton ouvre la modale avec le
+    bon aperçu (créneaux réels de la semaine affichée), nom + visibilité modifiables,
+    Enregistrer désactivé si la semaine est vide, le modèle créé apparaît aussitôt à
+    la fois dans le dropdown « Modèle » et dans l'écran Modèles, avec les bons
+    créneaux (recette, statut) persistés dans `localStorage` (compte démo).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
