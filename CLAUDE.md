@@ -1305,6 +1305,60 @@ plus simple et plus sûr à maintenir que des upserts fins.
     déjà existantes (`is_family_member`, `owns_recipe`...), rien de nouveau. Compte
     démo revérifié en conditions réelles (scripts jetables) : chemin 100% local
     inchangé, ajout/suppression toujours fonctionnels sans notion de scope.
+- **Catalogue d'ingrédients enrichi — fruits/légumes du quotidien + cuisines du
+  monde** (demande explicite : « enrichis largement les ingrédients », précisée en
+  cours de route pour couvrir aussi fortement fruits et légumes) — **106 nouveaux
+  ingrédients `scope=global`**, portant le catalogue global de 188 à **294** lignes.
+  Chantier 100% contenu (aucun fichier de code touché, aucune migration de schéma —
+  la table `ingredients` ne change pas de colonnes) : insertion SQL directe par lots
+  via `execute_sql`, même méthode que les enrichissements précédents (lot chinois,
+  refonte du catalogue de recettes).
+  - **Volet Fruits & Légumes** (52) : la base française/occidentale, pourtant la
+    plus "basique" du catalogue, avait des trous surprenants — aucun chou, aucun
+    épinard, aucun haricot vert, petit pois, ni pêche/cerise/melon/ananas. +27
+    légumes (choux, épinards, haricots verts, petits pois, asperges, artichaut,
+    betterave, navet, panais, potiron, fenouil bulbe, endive, échalote, pleurotes,
+    portobello, cresson, blette, patate douce, topinambour, roquette, câpres,
+    piments jalapeño/poblano) et +25 fruits (pastèque, melon, ananas, kiwi, pêche,
+    abricot, prune, cerise, framboise, myrtille, mûre, groseille, rhubarbe, figue,
+    grenade, litchi, clémentine, nectarine, coing, noix de coco, papaye, fruit de
+    la passion, dattes, raisins secs, citron confit).
+  - **Volet Cuisines du monde** (54, la cuisine chinoise étant déjà bien couverte
+    depuis les sessions précédentes) : italienne (parmesan, mozzarella, ricotta,
+    mascarpone, burrata, pecorino, pancetta, prosciutto, origan, polenta, riz
+    arborio, anchois, passata de tomate, vinaigre balsamique), maghrébine (ras el
+    hanout, harissa, couscous, huile d'argan, merguez, eau de fleur d'oranger,
+    curcuma), indienne (garam masala, cardamome verte, graines de fenugrec,
+    lentilles corail, ghee, paneer, graines de moutarde, asafoetida, riz basmati,
+    chutney de mangue), japonaise (miso, mirin, saké cuisine, bouillon dashi,
+    wasabi, algue kombu séchée, wakame séché, nouilles udon/soba, riz à sushi,
+    panko, bonite séchée/katsuobushi), mexicaine (tortilla de maïs, haricots
+    noirs, piments chipotle/ancho séchés, queso fresco) et moyen-orientale
+    (za'atar, sumac, boulgour, halloumi).
+  - **Dédoublonnage** : chaque nom candidat comparé (insensible à la casse) aux 188
+    lignes globales existantes avant insertion — plusieurs quasi-doublons
+    volontairement gardés distincts d'un ingrédient déjà présent quand la
+    différence est réelle en cuisine (ex. "Riz basmati"/"Riz arborio"/"Riz à
+    sushi" à côté de "Riz" générique, "Haricots noirs" à côté de "Haricots
+    blancs", "Vinaigre balsamique" à côté de "Vinaigre"/"Vinaigre de riz", "Piment
+    chipotle séché"/"Piment ancho séché" à côté de "Piment séché" générique —
+    même logique que les paires déjà présentes "Poivre"/"Poivre du Sichuan"/
+    "Poivre blanc").
+  - **Catégorisation** : réutilise les 9 catégories existantes, conventions déjà
+    établies réappliquées (bouillons/algues séchées → `autres` ; piments frais/
+    marinés → `legumes`, piments séchés → `epices` ; poissons/fruits de mer →
+    `viande`, y compris séchés type katsuobushi ; pâtes fermentées/vins de cuisine
+    condimentaires type miso/mirin/saké → `sauces`, même traitement que le vin de
+    Shaoxing chinois).
+  - **Vérifié** : comptage par catégorie avant/après (188→294, répartition
+    conforme au détail ci-dessus), requête de contrôle sans aucun doublon de nom
+    (insensible à la casse) sur l'ensemble du catalogue global, advisors de
+    sécurité Supabase revérifiés après insertion (mêmes avertissements
+    pré-existants, aucune régression — insertion de données pure, aucune policy
+    RLS touchée). Aucun changement de code : `IngredientsView`/`RecipeModal`/
+    `IngredientRestrictionPicker` lisent déjà tout `scope=global` sans filtrage
+    supplémentaire, les nouvelles lignes suivent donc le même chemin déjà validé
+    que les 188 précédentes.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
