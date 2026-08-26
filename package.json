@@ -12,6 +12,7 @@
     "test:rls": "node --env-file=.env.test.local scripts/test-rls.mjs"
   },
   "dependencies": {
+    "@capacitor/core": "^8.5.0",
     "@supabase/supabase-js": "^2.110.7",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

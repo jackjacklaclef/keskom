@@ -16,6 +16,14 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
   étapes touchant la couche data/auth. `App.tsx` fait maintenant 1137 lignes : plus
   qu'un seul composant top-level, `App`, qui porte le state racine, ses ~62 handlers,
   les effets (dont les abonnements Realtime) et le routing entre vues.
+  **Mise à jour (session déploiement app physique, 2026-08-25)** : deux reliquats de ce
+  refactor, `src/App_2.tsx` (4694 lignes) et `src/App_3.tsx` (6161 lignes), traînaient
+  depuis dans le repo sans être importés nulle part — jamais nettoyés après le
+  découpage. Comme `tsconfig.app.json` inclut tout `src/` sans exclusion, ces ~11 000
+  lignes de code mort gonflaient artificiellement le compteur "1863 erreurs
+  pré-existantes" ci-dessus. Supprimés ; **nouvelle base de parité typecheck : 928
+  erreurs** (à comparer désormais à ce chiffre, pas à 1863, pour tout futur refactor
+  qui viserait la parité stricte).
 
   Arborescence actuelle (lignes de code) :
 
@@ -103,10 +111,24 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
   cette session (jamais rendu nulle part) ; conservé tel quel, pas supprimé, pour ne
   rien changer au comportement pendant le refactor.
 - Client Supabase : **`src/lib/supabaseClient.ts` est désormais le vrai fichier utilisé**
-  (`getSupabase()`, cache la *promesse* elle-même — voir bugs ci-dessous). Il
-  remplace l'ancien fichier mort du même nom qui installait le package npm
-  `@supabase/supabase-js` mais n'était jamais importé — supprimé lors de l'étape 3
-  du découpage plutôt que de coexister avec deux clients Supabase différents.
+  (`getSupabase()`). Il remplace l'ancien fichier mort du même nom qui installait le
+  package npm `@supabase/supabase-js` mais n'était jamais importé — supprimé lors de
+  l'étape 3 du découpage plutôt que de coexister avec deux clients Supabase différents.
+  **Correction (session déploiement app physique, 2026-08-25)** : contrairement à ce
+  que cette note affirmait jusqu'ici, `getSupabase()` chargeait en réalité encore le
+  SDK via un `<script>` injecté pointant vers le CDN jsDelivr (`window.supabase.
+  createClient(...)`), et non le package npm `@supabase/supabase-js` — celui-ci restait
+  listé en dépendance mais jamais importé, l'étape 3 n'avait fait que supprimer le
+  fichier mort concurrent sans achever la vraie migration. Repéré en préparant un
+  wrapper Capacitor (app mobile native) : un fetch de script externe au démarrage est
+  fragile dans une WebView native (réseau/CSP différents d'un vrai navigateur).
+  Corrigé : `getSupabase()` fait maintenant un vrai `import { createClient } from
+  '@supabase/supabase-js'`, résolu de façon synchrone au chargement du module — la
+  signature `Promise<any>` est conservée pour ne pas toucher aux ~50 appelants
+  existants, mais le cache de la *promesse* (`_supabasePromise`, qui protégeait contre
+  la race condition entre `useEffect` concurrents et le handler `onload` du `<script>`
+  CDN — bug historique n°4 ci-dessous) a été supprimé : cette race ne peut plus se
+  produire, `createClient` n'étant plus asynchrone.
 - Compte **démo** (`demo@carnet.app` / `demo1234`) : reste 100% local (localStorage),
   aucune ligne ne lui correspond en base. Tous les handlers de données branchent sur
   `isDemo` pour choisir le chemin local vs Supabase.
@@ -1326,6 +1348,73 @@ Configurés dans `.claude/settings.local.json` (non versionné) :
   **Ce fichier doit donc rester à jour en continu** : si tu le lis et qu'il semble
   décalé par rapport au code, c'est que le hook n'a pas été respecté sur un tour donné
   — corrige-le à l'occasion plutôt que de laisser la dérive s'accumuler.
+
+## Déploiement en app mobile native (Capacitor) — en cours
+
+Demande explicite : envelopper le front-end React/Vite existant (pas de réécriture)
+dans **Capacitor** pour produire de vraies apps iOS/Android installables sur les
+stores, en plus de la PWA déployée sur Vercel. **Identité de l'app actée avec
+l'utilisateur : "Keskonm" / `com.keskonm.app`** (aligné sur le domaine public
+`keskonm.vercel.app`/`keskonm.app` déjà utilisé, plutôt que sur `keskom`, le nom du
+repo/`package.json`) — décision à respecter au moment du `cap init` (l'identifiant est
+quasi impossible à changer après publication sur les stores).
+
+Trois correctifs préalables (refactor pur, dans le dépôt web, avant tout scaffolding
+Capacitor) identifiés puis faits dans cette session — voir les entrées correspondantes
+plus haut (client Supabase, section Architecture générale ci-dessus) :
+
+1. **Client Supabase CDN → import npm réel** (voir correction dans la note sur
+   `src/lib/supabaseClient.ts` plus haut) — un fetch de script externe au démarrage est
+   fragile dans une WebView native.
+2. **Suppression de `App_2.tsx`/`App_3.tsx`** (voir note sur la nouvelle base
+   typecheck 928 plus haut) — code mort sans rapport direct avec Capacitor, mais
+   nettoyé au passage plutôt que de le traîner plus longtemps.
+3. **Reset mot de passe et bandeau de mise à jour PWA rendus conscients de la
+   plateforme** :
+   - `src/lib/authService.ts` (`resetPassword`) : `redirectTo` bascule sur l'URL web
+     fixe de prod (`https://keskonm.vercel.app?reset=true`) au lieu de
+     `window.location.origin` (qui n'a aucun sens dans une WebView native) dès que
+     `Capacitor.isNativePlatform()` est vrai. Conséquence assumée pour la v1 : le lien
+     de l'email de reset ouvre le navigateur externe (pas l'app native) — pas d'infra
+     de deep link pour l'instant, l'utilisateur revient se connecter dans l'app une
+     fois le mot de passe changé.
+   - `src/App.tsx` : `<UpdatePrompt />` n'est plus monté du tout quand
+     `Capacitor.isNativePlatform()` est vrai (`{!Capacitor.isNativePlatform() &&
+     <UpdatePrompt />}`) — un service worker PWA n'a aucun sens dans une coquille
+     native (Capacitor met à jour les assets via les stores, pas via un service
+     worker face à Vercel). Gating fait dans le parent plutôt que dans
+     `UpdatePrompt` lui-même pour ne pas appeler son hook `useRegisterSW` de façon
+     conditionnelle (Rules of Hooks).
+   - `@capacitor/core` ajouté en dépendance (`npm install @capacitor/core`) — pur
+     ajout de package, aucun effet sur le build web actuel (`isNativePlatform()` y
+     vaut toujours `false`), pas besoin d'attendre le scaffolding Capacitor complet
+     pour écrire ce code platform-aware.
+
+Vérifié à chaque étape : `npm run build` (inchangé), `npm run typecheck` (parité
+stricte à 928 erreurs après la suppression des fichiers morts — voir plus haut —,
+aucune régression introduite par les trois correctifs). **`npm run test:rls` n'a pas
+pu être exécuté dans cette session** (fichier `.env.test.local` avec les identifiants
+des comptes de test, gitignore, absent de cet environnement d'exécution) — à relancer
+manuellement avant de considérer le correctif Supabase comme acquis, comme le veut la
+procédure habituelle du projet pour tout ce qui touche `authService.ts`/
+`supabaseClient.ts`.
+
+**Reste à faire (scaffolding Capacitor, hors code — nécessite Xcode/Android Studio,
+absents de cet environnement)** : `npm install @capacitor/cli @capacitor/ios
+@capacitor/android`, `npx cap init "Keskonm" "com.keskonm.app" --web-dir=dist`,
+`npx cap add ios`/`android`, génération icônes/splash depuis `public/icons/` (source
+512×512 actuelle un peu sous la résolution 1024×1024 idéale — qualité potentiellement
+un peu molle sur certaines tailles cibles, pas bloquant), `npx cap sync`. Nécessite en
+plus un compte Apple Developer Program (99$/an) et un compte Google Play Console
+(25$ une fois) pour la soumission aux stores.
+
+**Explicitement pas nécessaire pour une v1** (voir plan détaillé pour le raisonnement
+complet) : caméra native (`@capacitor/camera`) pour la photo d'étape de recette —
+l'`<input type="file">` actuel fonctionne déjà via le sélecteur natif de la WebView ;
+navigateur in-app (`@capacitor/browser`) pour les liens Maps restaurant — s'ouvrent
+déjà via le navigateur/l'app Maps du système ; deep link pour le reset mot de passe ;
+reconnexion Realtime explicite au retour au premier plan (à valider par test manuel
+sur device plutôt que par un correctif de code a priori).
 
 ## Notes diverses
 
