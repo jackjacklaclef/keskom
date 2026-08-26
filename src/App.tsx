@@ -171,13 +171,15 @@ const App = () => {
     return () => { cancelled = true; };
   }, [currentUser?.id]);
 
-  // ── Chargement des ingrédients (catalogue global, comptes non-démo) ──
+  // ── Chargement des ingrédients (catalogue global + ingrédients privés par
+  // famille, comptes non-démo) — refetch au changement de famille active pour voir
+  // les ingrédients privés de la famille qu'on vient de sélectionner ──
   useEffect(() => {
     if (!currentUser || isDemo) return;
     let cancelled = false;
     (async () => { const loaded = await fetchIngredients(); if (!cancelled) setIngredients(loaded); })();
     return () => { cancelled = true; };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, activeFamily?.id]);
 
   // ── Chargement des préférences perso (régimes, allergies, aliments non appréciés) ──
   useEffect(() => {
@@ -976,12 +978,15 @@ const App = () => {
   // ---- Ingrédients ----
   const handleAddIngredient = async (ing) => {
     if (isDemo) { setIngredients((prev) => [...prev, ing]); return; }
+    if (!activeFamily?.id) { showToast("Sélectionnez une famille avant d'ajouter un ingrédient", "clay"); return; }
     try {
       const sb = await getSupabase();
       const categoryMap = await fetchIngredientCategoryMap();
-      const { data, error } = await sb.from("ingredients").insert({ name: ing.name, ingredient_category_id: categoryMap[ing.category] }).select("id").single();
+      const { data, error } = await sb.from("ingredients")
+        .insert({ name: ing.name, ingredient_category_id: categoryMap[ing.category], scope: "family", family_id: activeFamily.id })
+        .select("id").single();
       if (error) throw error;
-      setIngredients((prev) => [...prev, { id: String(data.id), name: ing.name, category: ing.category }]);
+      setIngredients((prev) => [...prev, { id: String(data.id), name: ing.name, category: ing.category, scope: "family", familyId: String(activeFamily.id) }]);
     } catch { showToast("Erreur lors de l'ajout de l'ingrédient", "clay"); }
   };
 
@@ -1182,7 +1187,7 @@ const App = () => {
     calendar: { mealPlans: familyMealPlans, recipes: familyRecipes, onAddMeal: handleAddMeal, onUpdateMeal: handleUpdateMeal, onMoveMeal: handleMoveMeal, onAddRecipe: handleAddRecipe, recentRecipeIds, weekTemplates: familyWeekTemplates, onApplyTemplate: handleApplyTemplate, onDuplicateWeek: handleDuplicateWeek, onClearWeek: handleClearWeek, onNavigate: setCurrentView, familyMembers: activeFamily?.members || [], ingredients, familyAllergies },
     recipes: { recipes: familyRecipes, allRecipes: recipes, globalRecipes: isDemo ? initialRecipes : recipes.filter((r) => r.scope === "global"), ingredients, currentUser, userFamilies, activeFamily, onAddRecipe: handleAddRecipe, onEditRecipe: handleEditRecipe, onDeleteRecipe: handleDeleteRecipe, onImportRecipe: handleImportRecipe, onCreateVariant: handleCreateVariant, onShareRecipe: handleShareRecipe, activeFamilyId: activeFamily?.id },
     shopping: { shoppingList: familyShoppingList, ingredients, onAddItem: handleAddShoppingItem, onToggleItem: handleToggleShoppingItem, onDeleteItem: handleDeleteShoppingItem, onGenerate: handleGenerateShoppingList },
-    ingredients: { ingredients, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient, canEdit: isDemo },
+    ingredients: { ingredients, onAddIngredient: handleAddIngredient, onDeleteIngredient: handleDeleteIngredient, isDemo, activeFamilyId: activeFamily?.id ? String(activeFamily.id) : null },
     templates: { weekTemplates: familyWeekTemplates, recipes: familyRecipes, recentRecipeIds, activeFamily, onSaveTemplate: handleSaveTemplate, onDeleteTemplate: handleDeleteTemplate, onApplyTemplate: handleApplyTemplate },
     family: { families: userFamilies, currentUser, ingredients, onCreateFamily: handleCreateFamily, onJoinFamily: handleJoinFamily, onLeaveFamily: handleLeaveFamily, onSetActiveFamily: handleSetActiveFamily, onPromoteMember: handlePromoteMember, onRemoveMember: handleRemoveMember, onRegenerateCode: handleRegenerateCode, onAddMemberByEmail: handleAddFamilyMemberByEmail, onAddLocalMember: handleAddLocalFamilyMember, onSetMyAvatar: handleSetMyAvatar, onSetMemberAvatar: handleSetMemberAvatar, onSetMyAppetite: handleSetMyAppetite, onAssignMemberAppetite: handleAssignMemberAppetite },
     account: { currentUser, activeFamily, ingredients, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateUserProfile: handleUpdateUserProfile, onSetMyAvatar: handleSetMyAvatar, onReplayOnboarding: () => setShowOnboarding(true) },

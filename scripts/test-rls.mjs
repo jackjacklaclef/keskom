@@ -70,6 +70,63 @@ async function main() {
     check("A cannot read B's family", !famBAsA);
   }
 
+  console.log("ingredients (family-private scope)");
+  if (famA && famB) {
+    const { data: cat } = await a.from("ingredient_categories").select("id").limit(1).maybeSingle();
+    const categoryId = cat?.id;
+
+    const { data: newIng, error: insertErr } = await a.from("ingredients")
+      .insert({ name: "RLS Test A - ingrédient privé", ingredient_category_id: categoryId, scope: "family", family_id: famA.family_id })
+      .select("id").single();
+    check("A can insert a private ingredient into her own family", !insertErr && !!newIng);
+
+    if (newIng) {
+      const { error: globalInsertErr } = await a.from("ingredients")
+        .insert({ name: "RLS Test A - should fail (global)", ingredient_category_id: categoryId, scope: "global" });
+      check("A cannot insert a global ingredient", !!globalInsertErr);
+
+      const { data: globalIng } = await a.from("ingredients").select("id").eq("scope", "global").limit(1).maybeSingle();
+      if (globalIng) {
+        const { data: delGlobal } = await a.from("ingredients").delete().eq("id", globalIng.id).select("id");
+        check("A cannot delete a global ingredient", (delGlobal || []).length === 0);
+      }
+
+      const { data: seenByB } = await b.from("ingredients").select("id").eq("id", newIng.id);
+      check("B does not see A's private ingredient directly", (seenByB || []).length === 0);
+
+      const { data: delByB } = await b.from("ingredients").delete().eq("id", newIng.id).select("id");
+      check("B cannot delete A's private ingredient", (delByB || []).length === 0);
+
+      const { error: insertByBErr } = await b.from("ingredients")
+        .insert({ name: "RLS Test B - should fail", ingredient_category_id: categoryId, scope: "family", family_id: famA.family_id });
+      check("B cannot insert into A's family", !!insertByBErr);
+
+      const { data: familyRecipe } = await a.from("recipes").select("id").eq("name", "RLS Test A - recette familiale").maybeSingle();
+      if (familyRecipe) {
+        const { data: ri } = await a.from("recipe_ingredients")
+          .insert({ recipe_id: familyRecipe.id, ingredient_id: Number(newIng.id), quantity_label: "1" })
+          .select("id").single();
+
+        const { error: shareErr } = await a.from("recipe_family_shares").insert({ recipe_id: familyRecipe.id, family_id: famB.family_id });
+        check("A can share her family recipe with B", !shareErr);
+
+        const { data: seenByBAfterShare } = await b.from("recipes")
+          .select("id, recipe_ingredients(ingredient_id, ingredients(name))")
+          .eq("id", familyRecipe.id);
+        const resolvedName = (seenByBAfterShare?.[0]?.recipe_ingredients || []).some((r) => r.ingredients?.name === "RLS Test A - ingrédient privé");
+        check("B sees the shared recipe's private ingredient name resolved (not null)", resolvedName);
+
+        const { data: directSeenByB } = await b.from("ingredients").select("id").eq("id", newIng.id);
+        check("B can now see A's private ingredient directly via the shared recipe", (directSeenByB || []).length === 1);
+
+        await a.from("recipe_family_shares").delete().eq("recipe_id", familyRecipe.id).eq("family_id", famB.family_id);
+        if (ri) await a.from("recipe_ingredients").delete().eq("id", ri.id);
+      }
+
+      await a.from("ingredients").delete().eq("id", newIng.id);
+    }
+  }
+
   console.log("meal_plans (regression: with_check tautology bug)");
   if (famA && famB) {
     const { error } = await a.from("meal_plans").insert({ family_id: famB.family_id, date: "2099-01-01", created_by: null });

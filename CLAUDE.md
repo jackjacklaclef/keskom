@@ -160,12 +160,16 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
     ajoutées après la migration" pour le détail. Migration purement additive, aucune
     policy RLS touchée (le CRUD `recipes` reste gouverné par `owner_profile_id`/`scope`,
     indépendant de ces colonnes).
-- `ingredients` / `ingredient_categories` / `recipe_categories` / `units` — référentiels,
-  lecture publique. `ingredients` a des policies INSERT/DELETE censées être ouvertes à
-  tout authentifié (catalogue partagé, pas de notion de propriétaire — comme avant la
-  migration, en local) — **mais l'INSERT est en réalité bloqué en pratique, voir bug
-  connu ci-dessous : le GRANT SQL sur la table semble manquant, indépendamment de la
-  policy RLS.**
+- `ingredient_categories` / `recipe_categories` / `units` — référentiels, lecture
+  publique, aucune notion de propriétaire.
+- `ingredients` — catalogue global en lecture publique (`scope='global'`, la grande
+  majorité des lignes, non modifiable pour un compte réel) **+ ingrédients privés par
+  famille** (`scope='family'`, `family_id` non nul) modifiables par n'importe quel
+  membre de la famille propriétaire (`is_family_member(family_id)`) — voir
+  "Fonctionnalités ajoutées après la migration" pour le détail (schéma, RLS, fonction
+  `is_ingredient_visible_via_recipe` pour la visibilité croisée via une recette
+  partagée). `ingredient_id` référencé par `recipe_ingredients`
+  (`ON DELETE RESTRICT`) et `profile_food_restrictions` (`ON DELETE CASCADE`).
 - `meal_plans` (un par famille+date) → `meal_plan_meals` (un par type de repas ce
   jour-là, avec `status`, `restaurant_name`, `restaurant_url`) → `meal_plan_meal_recipes`
   (recettes du repas) + `meal_plan_meal_attendees` (membres présents à ce repas —
@@ -419,21 +423,6 @@ plus simple et plus sûr à maintenir que des upserts fins.
   reprendre avec `familyAllergies` (voir plus bas) le jour où quelqu'un veut que
   « Suggérer » respecte vraiment les allergies ; le volet dislikes resterait lui à
   faire (pas d'équivalent `get_family_dislikes` pour l'instant).
-- **INSERT et DELETE sur `ingredients` refusés pour un utilisateur authentifié normal**,
-  malgré des policies RLS censées les autoriser (`ingredients_insert_authenticated`,
-  `ingredients_delete_authenticated`, toutes deux `qual/with_check = true`) — confirmé
-  précisément via `information_schema.role_table_grants` : le rôle `authenticated` n'a
-  **que `SELECT`** sur `public.ingredients`, ni `INSERT` ni `DELETE` ne lui sont
-  accordés au niveau table (indépendant de la policy RLS — en RLS+Postgres il faut les
-  deux : le GRANT au niveau table ET une policy qui laisse passer la ligne). Repéré une
-  première fois en testant l'accès en écriture (erreur `permission denied for table
-  ingredients`, hint `GRANT INSERT ON public.ingredients TO authenticated`) ; requête
-  ci-dessus utilisée ensuite pour confirmer que le DELETE est logé à la même enseigne
-  (pas seulement l'INSERT, comme on le pensait initialement). **Toujours pas corrigé au
-  niveau du GRANT lui-même** — voir plus bas ("Catalogue d'ingrédients rendu en lecture
-  seule...") pour l'atténuation côté UI appliquée en attendant, et pourquoi le GRANT n'a
-  délibérément pas été posé tel quel.
-
 ## Fonctionnalités ajoutées pendant la migration
 
 - Famille : ajout de membre par email (RPC `add_family_member_by_email`), ajout de
@@ -1254,6 +1243,68 @@ plus simple et plus sûr à maintenir que des upserts fins.
     réelles (scripts CDP jetables) — compte démo : bouton d'ajout toujours présent,
     aucune note affichée ; compte réel (`rls-test-a`) : bouton et croix de suppression
     absents, note affichée, recherche/catégories toujours utilisables.
+- **Ingrédients privés par famille** (demande explicite, suite directe du point
+  précédent — la seconde piste envisagée à l'époque et mise de côté). Le catalogue
+  global reste inchangé et toujours en lecture seule pour un compte réel ; chaque
+  famille gagne en plus son propre sous-catalogue d'ingrédients privés, visibles et
+  modifiables par n'importe lequel de ses membres (pas réservé au propriétaire/admin —
+  même niveau de permission que les recettes privées/familiales).
+  - **Schéma** : `ingredients.scope` (`'global'|'family'`, défaut `'global'`) +
+    `ingredients.family_id` (FK `families`, `ON DELETE CASCADE`), calqué sur
+    `recipes.scope` mais avec un palier de moins (pas de `'private'` par propriétaire
+    individuel — non demandé). Migration purement additive, les ~188 lignes globales
+    existantes non retouchées (jamais de rétro-scope, pour éviter qu'un compte perde
+    l'accès à une allergie/recette existante — voir risque documenté au moment de
+    l'investigation).
+  - **RLS** : les 3 policies mortes (`ingredients_read`/`_insert_authenticated`/
+    `_delete_authenticated`, `qual/with_check = true`, jamais atteignables faute de
+    GRANT) remplacées par un modèle scope-aware — `ingredients_select_global`,
+    `ingredients_select_family` (`is_family_member(family_id)` OU visible via une
+    recette accessible), `ingredients_insert_family`/`ingredients_delete_family`
+    (`scope='family' AND is_family_member(family_id)` — le `WITH CHECK` bloque à lui
+    seul tout insert `scope='global'`, donc pas de règle séparée à maintenir pour
+    garder le catalogue global en lecture seule). Nouvelle fonction `SECURITY DEFINER`
+    `is_ingredient_visible_via_recipe` : rend un ingrédient privé de la famille A
+    visible pour la famille B dès qu'une recette accessible à B (notamment une recette
+    de A partagée à B via `recipe_family_shares`, fonctionnalité existante) le
+    référence — sans ça, l'embed imbriqué PostgREST `recipe_ingredients →
+    ingredients(name)` aurait résolu `name` à `null` pour B (la RLS d'une table jointe
+    s'applique indépendamment de la visibilité de la ligne parente). **Le GRANT
+    `INSERT, DELETE ON ingredients TO authenticated`** — celui volontairement laissé de
+    côté au tour précédent — est maintenant posé, mais seulement atteignable à travers
+    les policies scope='family' : le catalogue global reste structurellement toujours
+    en lecture seule pour tout compte réel, aucune régression sur la décision
+    précédente.
+  - **Front** : `fetchIngredients` (`src/lib/dataLayer.ts`) ne filtre rien côté
+    client — la RLS fait déjà l'union global + familles de l'appelant + ingrédients
+    visibles via une recette accessible, même principe que `fetchRecipesForUser` ;
+    ajoute juste `scope`/`familyId` au résultat pour que l'UI puisse distinguer.
+    `App.tsx` : l'effet de chargement des ingrédients dépend maintenant aussi de
+    `activeFamily?.id` (refetch au changement de famille active) ; `handleAddIngredient`
+    écrit `scope:"family", family_id: activeFamily.id` ; `viewProps.ingredients` passe
+    `isDemo`/`activeFamilyId` au lieu du `canEdit: isDemo` de la session précédente.
+    `IngredientsView` (`src/components/ingredients.tsx`) : bouton d'ajout visible dès
+    qu'une famille est active (plus seulement en démo), badge « Privé » sur les
+    ingrédients de scope `family`, bouton supprimer visible seulement sur les
+    ingrédients de la famille active (jamais sur le catalogue global ni sur ceux d'une
+    autre famille).
+  - **Vérifié** : RLS revalidée par simulation directe (`execute_sql`, `SET LOCAL role
+    authenticated` + `request.jwt.claims`, comptes `rls-test-a`/`rls-test-b`) plutôt que
+    via `npm run test:rls` (credentials `.env.test.local` non disponibles dans cette
+    session distante) — les 8 scénarios du plan tous confirmés : A peut créer un
+    ingrédient privé dans sa famille, ne peut ni insérer ni supprimer en scope global, B
+    ne voit/supprime/insère rien dans la famille de A, et une fois la recette de A
+    partagée à B, B voit le nom de l'ingrédient résolu dans l'embed imbriqué **et** peut
+    le lire directement. Nouveaux checks équivalents ajoutés à `scripts/test-rls.mjs`
+    pour que `npm run test:rls` les rejoue localement (credentials disponibles côté
+    utilisateur). `npm run build`/`typecheck` en parité (aucune nouvelle erreur — les 2
+    apparues en cours de route, dues à l'inférence stricte de TS sur un paramètre par
+    défaut `null`, corrigées en typant `IngredientsView`). Advisors de sécurité
+    Supabase revérifiés : seul le nouveau `is_ingredient_visible_via_recipe` apparaît,
+    dans la même classe d'avertissement attendue que les fonctions `SECURITY DEFINER`
+    déjà existantes (`is_family_member`, `owns_recipe`...), rien de nouveau. Compte
+    démo revérifié en conditions réelles (scripts jetables) : chemin 100% local
+    inchangé, ajout/suppression toujours fonctionnels sans notion de scope.
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 
