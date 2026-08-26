@@ -7,13 +7,19 @@ import { getSupabase } from "./supabaseClient";
 // Chargées depuis Supabase pour les comptes réels ; le compte démo garde son
 // jeu de données local (aucune ligne ne lui correspond en base).
 
-// ---- Ingrédients (catalogue global, lecture publique) ----
+// ---- Ingrédients (catalogue global en lecture publique + ingrédients privés par
+// famille, scope='family') — aucun filtre côté client : la RLS renvoie déjà l'union
+// du catalogue global, des familles de l'appelant, et de tout ingrédient privé rendu
+// visible via une recette accessible (is_ingredient_visible_via_recipe). ----
 export const fetchIngredients = async (): Promise<any[]> => {
   const sb = await getSupabase();
   if (!sb) return [];
-  const { data, error } = await sb.from("ingredients").select("id, name, ingredient_categories(short_name)");
+  const { data, error } = await sb.from("ingredients").select("id, name, scope, family_id, ingredient_categories(short_name)");
   if (error || !data) return [];
-  return data.map((i: any) => ({ id: String(i.id), name: i.name, category: i.ingredient_categories?.short_name }));
+  return data.map((i: any) => ({
+    id: String(i.id), name: i.name, category: i.ingredient_categories?.short_name,
+    scope: i.scope, familyId: i.family_id ? String(i.family_id) : null,
+  }));
 };
 
 // ---- Catégories de recettes (mapping short_name -> id, mis en cache) ----
@@ -184,6 +190,9 @@ export const fetchRecipesForUser = async (): Promise<any[]> => {
 export const saveRecipeIngredients = async (sb: any, recipeId: number, ingredients: any[]) => {
   await sb.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
   if (ingredients.length === 0) return;
+  // Repose entièrement sur la RLS de `ingredients` (global + ingrédients privés
+  // visibles de l'appelant) — aucun filtre à ajouter ici pour résoudre par nom un
+  // ingrédient privé à la famille de l'utilisateur qui enregistre la recette.
   const { data: allIngredients } = await sb.from("ingredients").select("id, name");
   const idByName = Object.fromEntries((allIngredients || []).map((i: any) => [i.name, i.id]));
   const rows = ingredients

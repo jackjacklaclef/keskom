@@ -4,12 +4,15 @@ import { space, radius } from "../theme";
 import { ingredientCategories } from "../constants";
 import { Icon, CategoryDot, EmptyState } from "./ui";
 
-export const IngredientsView = ({ ingredients, onAddIngredient, onDeleteIngredient, canEdit = false }) => {
+export const IngredientsView = ({ ingredients, onAddIngredient, onDeleteIngredient, isDemo = false, activeFamilyId = null }: any) => {
   const [selectedCategory, setSelectedCategory] = useState("legumes");
   const [search, setSearch] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newCategory, setNewCategory] = useState("legumes");
+
+  const canAdd = isDemo || !!activeFamilyId;
+  const canDelete = (ing: any) => isDemo || (ing.scope === "family" && ing.familyId === activeFamilyId);
 
   const filteredIngredients = ingredients.filter(
     (ing) => ing.category === selectedCategory && ing.name.toLowerCase().includes(search.toLowerCase())
@@ -25,25 +28,23 @@ export const IngredientsView = ({ ingredients, onAddIngredient, onDeleteIngredie
     <div>
       <div className="mp-view-header">
         <h1 className="mp-h1">Ingrédients</h1>
-        {canEdit && (
+        {canAdd && (
           <button type="button" className="mp-btn mp-btn-secondary mp-btn-sm" onClick={() => setShowAddForm((v) => !v)}>
             <Icon name="plus" size={13} /> Nouvel ingrédient
           </button>
         )}
       </div>
 
-      {/* Catalogue partagé entre tous les comptes : l'ajout/la suppression sont
-          temporairement désactivés pour un compte réel (voir CLAUDE.md — GRANT SQL
-          manquant côté base, INSERT/DELETE échouent silencieusement aujourd'hui), en
-          attendant soit un correctif du GRANT, soit un vrai catalogue privé par
-          utilisateur/famille. Le compte démo (100% local) n'est pas concerné. */}
-      {!canEdit && (
+      {/* Le catalogue global reste partagé par tous les comptes et en lecture seule
+          (seuls les ingrédients privés d'une famille, badgés ci-dessous, sont
+          modifiables par ses membres). Sans famille active, l'ajout est désactivé. */}
+      {!canAdd && (
         <p className="mp-small mp-text-faint" style={{ marginBottom: space.md }}>
-          Catalogue partagé par tous les comptes — en lecture seule pour le moment.
+          Rejoignez ou créez une famille pour ajouter vos propres ingrédients.
         </p>
       )}
 
-      {canEdit && showAddForm && (
+      {canAdd && showAddForm && (
         <div className="mp-card" style={{ marginBottom: space.lg, background: "var(--paper-sunken)" }}>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
             <input className="mp-input" style={{ flex: "1 1 200px" }} value={newName}
@@ -80,8 +81,9 @@ export const IngredientsView = ({ ingredients, onAddIngredient, onDeleteIngredie
               <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }} className="mp-small">
                 <CategoryDot hex={category.hex} />
                 {ingredient.name}
+                {ingredient.scope === "family" && <span className="mp-badge mp-badge-neutral">Privé</span>}
               </span>
-              {canEdit && (
+              {canDelete(ingredient) && (
                 <button type="button" onClick={() => onDeleteIngredient(ingredient.id)} aria-label={`Supprimer ${ingredient.name}`}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)", display: "flex" }}>
                   <Icon name="x" size={13} />
