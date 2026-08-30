@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.keskom.app",
+      "sha256_cert_fingerprints": [
+        "CC:85:98:94:30:E7:EA:EB:4B:76:14:D1:EF:60:42:1F:89:FF:06:F6:76:3E:4A:B9:43:4C:47:EF:E1:A7:2E:5E"
+      ]
+    }
+  }
+]

@@ -1365,6 +1365,35 @@ Configurés dans `.claude/settings.local.json` (non versionné) :
   décalé par rapport au code, c'est que le hook n'a pas été respecté sur un tour donné
   — corrige-le à l'occasion plutôt que de laisser la dérive s'accumuler.
 
+## Publication Android (Play Store via TWA)
+
+Keskom reste une PWA (pas de code natif) : la publication Android passe par une
+**Trusted Web Activity (TWA)**, un simple wrapper qui affiche le site déployé
+(`keskonm.vercel.app`) plein écran sans barre d'adresse, vérifié via Digital Asset
+Links plutôt que par du code Android à maintenir dans ce repo.
+
+- `public/.well-known/assetlinks.json` — déclare que le certificat de signature de
+  l'app Android (`package_name: com.keskom.app`) est autorisé à représenter
+  `keskonm.vercel.app` en plein écran. Contient l'empreinte SHA-256 du certificat de
+  signature ; si le domaine ou le keystore change un jour, ce fichier doit être
+  régénéré et redéployé en conséquence (l'app Android devra alors aussi être
+  reconstruite/republiée pour pointer vers le nouveau domaine).
+- **Keystore de signature volontairement hors dépôt** — généré une fois
+  (`keytool`, 2048 bits RSA, validité 30 ans) et transmis directement à
+  l'utilisateur, jamais committé (une clé de signature perdue ou fuitée dans un
+  repo public empêcherait/compromettrait toute mise à jour future de l'app sur le
+  Play Store). Le mot de passe et l'empreinte du certificat vivent uniquement dans
+  ce fichier remis en main propre, pas dans ce dépôt ni dans l'historique Claude.
+- **Le `.aab` (Android App Bundle) signé n'est pas généré depuis une session Claude
+  Code distante** — ces sessions tournent avec un accès réseau restreint à une
+  liste blanche (npm/PyPI/GitHub/Supabase...) qui bloque à la fois le site en prod
+  et les serveurs Google nécessaires pour télécharger le SDK Android/Bubblewrap.
+  Le build réel se fait donc côté utilisateur, via **PWABuilder** (pwabuilder.com,
+  le plus simple : pas d'installation, prend le manifest PWA en entrée, permet
+  d'uploader ce même keystore pour resigner) ou **Bubblewrap CLI** en local si
+  Android Studio/le SDK sont déjà installés. Le paquet généré doit utiliser
+  `com.keskom.app` comme package name pour matcher `assetlinks.json`.
+
 ## Notes diverses
 
 - Repo : `github.com/jackjacklaclef/keskom`, déployé sur Vercel depuis `main`.
