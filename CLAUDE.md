@@ -186,6 +186,10 @@ accumulés au fil des sessions Claude, pour éviter de re-découvrir les mêmes 
   `profile_food_restrictions` (allergies **et** aliments non appréciés dans la même
   table, distingués par `restriction_type`, chaque ligne référence soit un ingrédient
   soit une catégorie entière via `item_type`).
+- `mcp_tokens` — tokens personnels pour le serveur MCP (voir "Fonctionnalités ajoutées
+  après la migration" ci-dessous). Self-only (RLS sur `profile_id = auth.uid()`),
+  jamais le token en clair : seul son hash SHA-256 (`token_hash`) est stocké, calculé
+  côté client au moment de la création — même principe qu'un mot de passe.
 
 Toutes les tables perso (recipes privées, meal_plans, shopping_list_items,
 week_templates, profile_diets, profile_food_restrictions) suivent le même pattern
@@ -1343,6 +1347,76 @@ plus simple et plus sûr à maintenir que des upserts fins.
     Enregistrer désactivé si la semaine est vide, le modèle créé apparaît aussitôt à
     la fois dans le dropdown « Modèle » et dans l'écran Modèles, avec les bons
     créneaux (recette, statut) persistés dans `localStorage` (compte démo).
+- **Serveur MCP (Model Context Protocol) — accès en lecture seule pour un assistant IA
+  externe** (demande explicite : « comment créer un mcp pour que Claude, ChatGPT ou
+  autre puisse accéder à Keskom »). Décisions validées avec l'utilisateur avant
+  implémentation (2 questions posées) : périmètre **lecture seule** pour cette première
+  version (pas d'écriture depuis un assistant externe) ; authentification par **token
+  personnel** généré depuis l'app (pas d'OAuth complet — plus rapide à livrer, un flux
+  OAuth via Supabase Auth reste une évolution possible si plusieurs personnes distinctes
+  doivent un jour s'y connecter).
+  - **Nouveau fichier `api/mcp.ts`** — une fonction serverless Vercel (Node, détectée
+    automatiquement par la présence du dossier `api/`, aucun `vercel.json` nécessaire),
+    en dehors de l'arborescence `src/` buildée par Vite : **non couverte par
+    `npm run build` ni par `npm run typecheck`** (ni l'une ni l'autre ne référence
+    `api/`), vérifiée séparément par une compilation `tsc` ad hoc pendant cette session.
+    Utilise `@modelcontextprotocol/sdk` (`McpServer` + `StreamableHTTPServerTransport`
+    en **mode stateless**, `sessionIdGenerator: undefined` — une instance par requête
+    HTTP, adapté au serverless qui ne garde aucun état entre deux invocations) et
+    `zod` pour les schémas d'entrée des outils ; les deux ajoutés aux **dépendances**
+    de production (pas devDependencies, le code tourne en prod). `@vercel/node` ajouté
+    en devDependency uniquement pour les types `VercelRequest`/`VercelResponse`.
+  - **Auth** : le token en clair n'est jamais stocké — généré côté client (Web Crypto,
+    `crypto.getRandomValues` + `crypto.subtle.digest("SHA-256", ...)`) dans un nouveau
+    composant `McpAccessSection` (`src/components/account.tsx`, section « Assistants IA
+    (MCP) » de l'écran Mon compte, masquée pour le compte démo qui n'a pas de ligne
+    Supabase) et affiché **une seule fois** à la création ; seul son hash SHA-256 est
+    persisté (`mcp_tokens.token_hash`, voir schéma Supabase ci-dessus) — même principe
+    qu'un mot de passe. `api/mcp.ts` rehash le token reçu en en-tête `Authorization:
+    Bearer <token>` et le compare à `token_hash` pour retrouver le `profile_id`, plutôt
+    que de faire confiance à un id transmis par le client.
+  - **Contournement RLS assumé et volontaire** : `api/mcp.ts` se connecte à Supabase
+    avec la clé **`service_role`** (variable d'environnement `SUPABASE_SERVICE_ROLE_KEY`,
+    **à ajouter manuellement dans les variables d'environnement du projet Vercel** — pas
+    configurable depuis cette session distante, aucun accès au dashboard Vercel) car il
+    n'y a pas de session Supabase/JWT utilisateur côté assistant IA, seulement le token
+    MCP. La clé service_role contourne totalement la RLS : chaque requête dans les
+    handlers d'outils filtre donc **explicitement** par `family_id`/`scope` (résolus une
+    fois à l'authentification, depuis `profiles.active_family_id` du token) exactement
+    comme le ferait la RLS pour un compte normal — à ne jamais oublier en ajoutant un
+    futur outil à ce fichier, une requête non filtrée y expose toute la base.
+  - **5 outils exposés**, tous en lecture seule : `get_meal_plan` (repas d'une période,
+    recettes/statut/restaurant/convives), `search_recipes` (catalogue global + recettes
+    privées de la famille active, par nom), `get_recipe_detail` (ingrédients + étapes),
+    `get_shopping_list`, `get_family_profile` (membres, appétit, allergies/aliments non
+    appréciés — pour que l'assistant puisse proposer des repas adaptés). Limite connue
+    et acceptée pour cette v1 : `search_recipes`/`get_recipe_detail` ne couvrent pas les
+    recettes `scope='private'` ni celles partagées à la famille active depuis une autre
+    famille via `recipe_family_shares` (même limitation que l'ancien filtre client
+    `familyRecipes`, non reproduite ici par souci de simplicité — évolution possible si
+    demandée).
+  - **Nouvelle table `mcp_tokens`** (migration `add_mcp_tokens`) — schéma et RLS
+    détaillés dans "Schéma Supabase" ci-dessus. Pas de policy `UPDATE` : le champ
+    `last_used_at` n'est mis à jour que par `api/mcp.ts` (rôle `service_role`, hors
+    RLS) à chaque authentification réussie ; un utilisateur normal n'a besoin que de
+    créer (`insert`) ou révoquer (`delete`) un token, jamais de l'éditer.
+  - **Vérifié** : RLS de `mcp_tokens` simulée directement en SQL (`execute_sql`,
+    `SET LOCAL role authenticated` + `request.jwt.claims`, comptes `rls-test-a`/`b`) —
+    A peut créer/lire/révoquer son propre token, B ne le voit pas et ne peut ni
+    l'insérer pour A ni le révoquer (`with_check`/`using` corrects dans les deux sens).
+    Checks équivalents ajoutés à `scripts/test-rls.mjs` pour que `npm run test:rls` les
+    rejoue côté utilisateur (credentials `.env.test.local` non disponibles dans cette
+    session distante, comme pour les sessions précédentes). `npm run build`/`typecheck`
+    en parité stricte (`api/` hors périmètre des deux, voir plus haut). Advisors de
+    sécurité Supabase revérifiés après la migration : mêmes avertissements
+    pré-existants, rien de nouveau. Le serveur MCP lui-même (bout en bout avec un vrai
+    client Claude.ai/ChatGPT) n'a **pas** pu être testé depuis cette session distante —
+    ni accès au dashboard Vercel pour y poser `SUPABASE_SERVICE_ROLE_KEY`, ni connecteur
+    MCP externe disponible ici. **À vérifier après le déploiement** : poser la variable
+    d'environnement côté Vercel, redéployer, puis ajouter le connecteur côté Claude.ai
+    (Réglages → Connecteurs → Ajouter un connecteur personnalisé, URL
+    `https://<domaine>/api/mcp`, en-tête `Authorization: Bearer <token>`) ou ChatGPT
+    (mode développeur → connecteurs).
 
 Configurés dans `.claude/settings.local.json` (non versionné) :
 

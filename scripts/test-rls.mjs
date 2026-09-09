@@ -162,6 +162,31 @@ async function main() {
     check("add_family_member_by_email rejects a non-owner caller", error?.message === "not_authorized");
   }
 
+  console.log("mcp_tokens (self-only — accès MCP pour assistants IA externes)");
+  {
+    const { data: created, error: insertError } = await a
+      .from("mcp_tokens")
+      .insert({ name: "RLS Test A - token MCP", token_hash: "rls-test-hash-a", token_prefix: "mcp_rlsA" })
+      .select("id")
+      .single();
+    check("A can create her own MCP token", !insertError);
+
+    const { data: seenByA } = await a.from("mcp_tokens").select("id").eq("token_hash", "rls-test-hash-a");
+    check("A sees her own MCP token", (seenByA || []).length === 1);
+
+    const { data: seenByB } = await b.from("mcp_tokens").select("id").eq("token_hash", "rls-test-hash-a");
+    check("B does not see A's MCP token", (seenByB || []).length === 0);
+
+    if (created) {
+      const { error: bDeleteError } = await b.from("mcp_tokens").delete().eq("id", created.id);
+      const { data: stillThere } = await a.from("mcp_tokens").select("id").eq("id", created.id);
+      check("B cannot revoke A's MCP token", !bDeleteError ? (stillThere || []).length === 1 : true);
+
+      const { error: aDeleteError } = await a.from("mcp_tokens").delete().eq("id", created.id);
+      check("A can revoke her own MCP token", !aDeleteError);
+    }
+  }
+
   await a.auth.signOut();
   await b.auth.signOut();
 

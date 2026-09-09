@@ -315,6 +315,41 @@ export const fetchShoppingListForFamily = async (familyId: string): Promise<any[
   return data.map((i: any) => ({ id: String(i.id), name: i.name, quantity: i.quantity, completed: i.completed, familyId }));
 };
 
+// ---- Tokens d'accès MCP (assistants IA externes type Claude/ChatGPT, lecture seule) ----
+export const fetchMcpTokens = async (profileId: string): Promise<any[]> => {
+  const sb = await getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("mcp_tokens").select("id, name, token_prefix, created_at, last_used_at")
+    .eq("profile_id", profileId).order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((t: any) => ({ id: String(t.id), name: t.name, prefix: t.token_prefix, createdAt: t.created_at, lastUsedAt: t.last_used_at }));
+};
+
+// Génère un token opaque côté client (Web Crypto) et ne stocke que son hash SHA-256 —
+// même principe qu'un mot de passe. Le token en clair n'est retourné qu'une fois, à la
+// création : impossible de le retrouver ensuite, seule sa révocation (delete) reste possible.
+export const createMcpToken = async (profileId: string, name: string): Promise<string | null> => {
+  const sb = await getSupabase();
+  if (!sb) return null;
+  const randomBytes = new Uint8Array(24);
+  crypto.getRandomValues(randomBytes);
+  const token = `mcp_${Array.from(randomBytes).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+  const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  const tokenHash = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const { error } = await sb.from("mcp_tokens").insert({
+    profile_id: profileId, name: name.trim() || "Assistant IA",
+    token_hash: tokenHash, token_prefix: token.slice(0, 12),
+  });
+  return error ? null : token;
+};
+
+export const revokeMcpToken = async (tokenId: string): Promise<void> => {
+  const sb = await getSupabase();
+  if (!sb) return;
+  await sb.from("mcp_tokens").delete().eq("id", tokenId);
+};
+
 // ---- Semaines types (par famille ou par utilisateur) ----
 export const fetchWeekTemplatesForFamily = async (userId: string, familyId: string | null): Promise<any[]> => {
   const sb = await getSupabase();

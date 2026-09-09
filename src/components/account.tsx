@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { colors, space, radius } from "../theme";
 import { NEW_MEMBER_SENTINEL, ingredientCategories, AVATAR_EMOJI_GROUPS, DIET_OPTIONS } from "../constants";
 import { Modal, ModalHeader, Field, TagInput, Icon, CategoryIcon, CategoryDot, EmptyState } from "./ui";
 import { PrivacyModal } from "./privacy";
+import { fetchMcpTokens, createMcpToken, revokeMcpToken } from "../lib/dataLayer";
 
 export const MemberModal = ({ member, onClose, onSave }) => {
   const [name, setName] = useState(member?.name || "");
@@ -321,6 +322,127 @@ export const DietSetupView = ({ currentUser, ingredients, onUpdateUserProfile, o
 };
 
 // ============================================================
+// ACCÈS MCP — tokens personnels pour assistants IA externes (lecture seule)
+// ============================================================
+
+const McpAccessSection = ({ profileId }) => {
+  const [tokens, setTokens] = useState<any[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState("");
+  const serverUrl = `${window.location.origin}/api/mcp`;
+
+  useEffect(() => { fetchMcpTokens(profileId).then(setTokens); }, [profileId]);
+
+  const copy = (text, key) => {
+    navigator.clipboard?.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(""), 1500);
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    const token = await createMcpToken(profileId, newName);
+    if (!token) return;
+    setCreatedToken(token);
+    setNewName("");
+    setShowCreate(false);
+    fetchMcpTokens(profileId).then(setTokens);
+  };
+
+  const handleRevoke = async (id) => {
+    await revokeMcpToken(id);
+    setTokens((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  return (
+    <div className="mp-card" style={{ marginBottom: space.xl }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.6rem", marginBottom: "0.5rem" }}>
+        <div>
+          <h3 className="mp-h3">Assistants IA (MCP)</h3>
+          <p className="mp-micro mp-text-faint">
+            Laissez Claude, ChatGPT ou un autre assistant compatible MCP consulter votre planning,
+            vos recettes, votre liste de courses et vos allergies — en lecture seule.
+          </p>
+        </div>
+        <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => setShowCreate(true)} style={{ flexShrink: 0 }}>
+          <Icon name="plus" size={13} /> Nouveau token
+        </button>
+      </div>
+
+      <div style={{ padding: "0.55rem 0.7rem", borderRadius: radius.sm, background: "var(--paper-sunken)", marginBottom: space.md }}>
+        <p className="mp-micro mp-text-soft" style={{ marginBottom: "0.2rem" }}>Adresse du serveur (à coller dans le connecteur)</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <code className="mp-small" style={{ wordBreak: "break-all", flex: 1 }}>{serverUrl}</code>
+          <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => copy(serverUrl, "url")}>
+            <Icon name={copied === "url" ? "check" : "copy"} size={12} />
+          </button>
+        </div>
+      </div>
+
+      {tokens.length === 0
+        ? <p className="mp-small mp-text-faint">Aucun token créé pour l'instant.</p>
+        : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            {tokens.map((t) => (
+              <div key={t.id} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "0.5rem 0.65rem", borderRadius: radius.sm, border: "1px solid var(--line)",
+              }}>
+                <div>
+                  <p className="mp-small" style={{ fontWeight: 600 }}>{t.name}</p>
+                  <p className="mp-micro mp-text-faint">
+                    {t.prefix}··· · créé le {new Date(t.createdAt).toLocaleDateString("fr-FR")}
+                    {t.lastUsedAt ? ` · utilisé le ${new Date(t.lastUsedAt).toLocaleDateString("fr-FR")}` : " · jamais utilisé"}
+                  </p>
+                </div>
+                <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => handleRevoke(t.id)} title="Révoquer">
+                  <Icon name="trash" size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+      {showCreate && (
+        <Modal onClose={() => setShowCreate(false)} width="380px">
+          <ModalHeader title="Nouveau token MCP" onClose={() => setShowCreate(false)} />
+          <form onSubmit={handleCreate}>
+            <Field label="Nom (pour vous y retrouver)">
+              <input className="mp-input" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ex : Claude, ChatGPT..." autoFocus />
+            </Field>
+            <button type="submit" className="mp-btn mp-btn-primary" style={{ width: "100%", justifyContent: "center", marginTop: space.sm }}>
+              Créer le token
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {createdToken && (
+        <Modal onClose={() => setCreatedToken(null)} width="420px">
+          <ModalHeader title="Token créé" onClose={() => setCreatedToken(null)} />
+          <p className="mp-small mp-text-soft" style={{ marginBottom: space.sm }}>
+            Copiez ce token maintenant : il ne sera plus jamais affiché. Collez-le comme
+            en-tête <code>Authorization: Bearer …</code> (ou champ « clé/token API ») lors
+            de la configuration du connecteur côté Claude/ChatGPT.
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 0.7rem", borderRadius: radius.sm, background: "var(--paper-sunken)", marginBottom: space.md }}>
+            <code className="mp-small" style={{ wordBreak: "break-all", flex: 1 }}>{createdToken}</code>
+            <button type="button" className="mp-btn mp-btn-ghost mp-btn-sm" onClick={() => copy(createdToken, "token")}>
+              <Icon name={copied === "token" ? "check" : "copy"} size={12} />
+            </button>
+          </div>
+          <button type="button" className="mp-btn mp-btn-secondary" style={{ width: "100%", justifyContent: "center" }} onClick={() => setCreatedToken(null)}>
+            J'ai copié le token
+          </button>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ============================================================
 // ACCOUNT VIEW
 // ============================================================
 
@@ -533,6 +655,9 @@ export const AccountView = ({ currentUser, activeFamily, ingredients, onLogout, 
           )}
         </div>
       </div>
+
+      {/* Assistants IA (MCP) — non pertinent pour le compte démo, 100% local */}
+      {!isDemo && <McpAccessSection profileId={currentUser.id} />}
 
       {/* Déconnexion */}
       <div className="mp-card" style={{ marginBottom: space.md, border: "1px solid var(--line)" }}>
