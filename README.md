@@ -48,6 +48,10 @@ authentification, Realtime, Storage). Progressive Web App (installable sur mobil
   modifiable à tout moment depuis Mon compte.
 - **Visite guidée** — petit tour du propriétaire à la première connexion, un écran par
   module ; rejouable à tout moment depuis Mon compte.
+- **Assistants IA (MCP)** — depuis Mon compte, générer un token personnel pour laisser
+  Claude, ChatGPT ou tout autre assistant compatible [MCP](https://modelcontextprotocol.io)
+  consulter en lecture seule le planning, les recettes, la liste de courses et le profil
+  de la famille (allergies, appétit). Voir [Configuration](#configuration).
 - **Compte démo** — utilisable sans backend, entièrement en local (voir plus bas).
 - **Bandeau de mise à jour** — un bandeau apparaît en haut de l'écran quand une nouvelle
   version de l'app a été déployée pendant que l'onglet était ouvert (« Actualiser »
@@ -99,6 +103,18 @@ secret à garder confidentiel.
 Pour lancer la suite `npm run test:rls`, un fichier `.env.test.local` (non versionné)
 doit fournir `SUPABASE_URL`, `SUPABASE_ANON_KEY` et les mots de passe de deux comptes de
 test dédiés (`rls-test-a@keskom-test.local` / `rls-test-b@keskom-test.local`).
+
+Le serveur MCP (`api/mcp.ts`, fonction serverless Vercel) a besoin de sa propre variable
+d'environnement côté Vercel, **jamais exposée au client** — à distinguer de la clé
+« anon » ci-dessus :
+
+```
+SUPABASE_SERVICE_ROLE_KEY=<clé service_role du projet Supabase>
+```
+
+Cette clé contourne entièrement la RLS ; elle ne doit exister que côté serveur (variable
+d'environnement Vercel), jamais dans le code front ni dans un fichier `.env` préfixé
+`VITE_` (ce qui l'embarquerait dans le bundle envoyé au navigateur).
 
 ## Déploiement
 
