@@ -1171,16 +1171,17 @@ const App = () => {
     }
   };
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
     if (!currentUser) return;
-    // Supprimer les données liées
+    // Supprimer les données liées côté état local (avant que notify(null) ne démonte l'app)
     setRecipes((prev) => prev.filter((r: any) => r.createdBy !== currentUser.id));
     setMealPlans((prev) => prev.filter((mp: any) => mp.familyId !== activeFamily?.id));
     setFamilies((prev) => prev
       .map((f: any) => ({ ...f, members: f.members.filter((m: any) => m.userId !== currentUser.id) }))
       .filter((f: any) => f.members.length > 0)
     );
-    AuthService.deleteAccount(currentUser.id);
+    const { error } = await AuthService.deleteAccount();
+    if (error) showToast("Erreur lors de la suppression du compte — réessayez.", "clay");
   };
 
   const viewProps = {

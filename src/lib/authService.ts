@@ -262,15 +262,23 @@ export const AuthService = (() => {
     },
 
     // ── Suppression de compte ─────────────────────────────
-    deleteAccount: async (userId: string) => {
-      saveToStorage(STORAGE_KEYS.currentUser, null);
+    // Passe par le RPC `delete_my_account` (SECURITY DEFINER) plutôt qu'un
+    // DELETE direct sur `profiles` : ce dernier n'a jamais eu de policy RLS
+    // et échouait silencieusement pour tout compte réel (voir migration
+    // fix_account_deletion_erasure). Le RPC gère aussi le transfert de
+    // propriété d'une famille encore utilisée par d'autres membres, puis
+    // supprime réellement le compte d'authentification (pas seulement la
+    // ligne `profiles`).
+    deleteAccount: async (): Promise<{ error: string | null }> => {
       const sb = await getSupabase();
       if (sb) {
-        // Supprimer le profil (cascade RLS)
-        await sb.from("profiles").delete().eq("profile_id", userId);
+        const { error } = await sb.rpc("delete_my_account");
+        if (error) return { error: error.message };
         await sb.auth.signOut();
       }
+      saveToStorage(STORAGE_KEYS.currentUser, null);
       notify(null);
+      return { error: null };
     },
 
     // ── Mot de passe oublié ───────────────────────────────

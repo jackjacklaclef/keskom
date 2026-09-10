@@ -187,6 +187,31 @@ async function main() {
     }
   }
 
+  console.log("delete_my_account (droit à l'effacement RGPD — regression: profiles n'avait aucune policy DELETE)");
+  {
+    // Compte 100% jetable, créé et supprimé par ce test lui-même (aucune
+    // fixture partagée à nettoyer) — nécessite la confirmation email
+    // désactivée côté projet pour obtenir une session immédiate.
+    const tempEmail = `rls-test-delete-${Date.now()}@keskom-test.local`;
+    const tempPassword = "TempPass123!";
+    const c = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: signUpData, error: signUpErr } = await c.auth.signUp({ email: tempEmail, password: tempPassword });
+
+    if (signUpErr || !signUpData?.session) {
+      check("delete_my_account: compte jetable créé avec session immédiate", false);
+    } else {
+      // Propriétaire d'une famille (déclenchait avant un RESTRICT sur
+      // families.owner_profile_id) pour exercer le chemin le plus contraint.
+      await c.from("families").insert({ owner_profile_id: signUpData.user.id, name: "RLS Test Delete - famille solo" });
+
+      const { error: rpcErr } = await c.rpc("delete_my_account");
+      check("delete_my_account s'exécute sans erreur (RESTRICT/absence de policy ne bloque plus)", !rpcErr);
+
+      const { error: reSignInErr } = await c.auth.signInWithPassword({ email: tempEmail, password: tempPassword });
+      check("le compte auth.users a bien été supprimé (reconnexion impossible)", !!reSignInErr);
+    }
+  }
+
   await a.auth.signOut();
   await b.auth.signOut();
 
