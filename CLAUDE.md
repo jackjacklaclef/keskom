@@ -391,6 +391,85 @@ plus simple et plus sûr à maintenir que des upserts fins.
     correctement les champs (via une ligne distincte, déjà correcte), ce qui rendait le
     bug invisible après un rechargement complet et a retardé le diagnostic. Corrigé en
     alignant `notify(...)` sur la même base fusionnée que la ligne `saveToStorage`.
+21. **« Supprimer mon compte » ne supprimait rien pour aucun compte réel — droit à
+    l'effacement RGPD non fonctionnel** (repéré en répondant à une question directe de
+    l'utilisateur : « l'application est-elle RGPD compliant ? »). `AuthService.
+    deleteAccount` (`src/lib/authService.ts`) faisait un `DELETE` direct sur `profiles`
+    sans jamais vérifier le résultat. Deux problèmes cumulés, confirmés en base
+    (`pg_policies`/`pg_constraint`) : `profiles` n'avait **aucune policy RLS `DELETE`**
+    (seulement `SELECT`/`UPDATE` sur soi-même) → le delete ne supprimait purement et
+    simplement rien, silencieusement ; et même avec une policy, plusieurs FK vers
+    `profiles` étaient en `RESTRICT`/`NO ACTION` (`families.owner_profile_id`,
+    `recipes.created_by`, `recipe_variants.created_by`, `meal_plans.created_by`,
+    `meal_plan_meals.updated_by`, `shopping_list_items.created_by`,
+    `week_templates.created_by`) — le delete aurait de toute façon échoué dès qu'un
+    utilisateur avait créé une famille ou une recette, donc pour pratiquement tout
+    compte réel. Concrètement : cliquer « Supprimer mon compte » déconnectait juste
+    l'utilisateur localement, sans toucher à la moindre ligne côté serveur (ni
+    `profiles`, ni `auth.users`) — contredisant directement la politique de
+    confidentialité (« toutes vos données personnelles seront supprimées »).
+    - **Migration `fix_account_deletion_erasure`** : `created_by`/`updated_by` sur
+      `recipes`/`recipe_variants`/`meal_plans`/`meal_plan_meals`/`shopping_list_items`/
+      `week_templates` passés en `ON DELETE SET NULL` (colonnes rendues nullable au
+      passage) — vérifié au préalable qu'aucune policy RLS ne s'appuie sur ces colonnes
+      pour l'autorisation (toutes utilisent `family_members`/`scope`/`owner_profile_id`) :
+      ce sont de simples champs d'audit, la donnée familiale partagée doit survivre au
+      départ de son auteur, seule la référence personnelle disparaît. `families.
+      owner_profile_id` reste volontairement en `RESTRICT` (pas question de supprimer
+      silencieusement une famille encore utilisée par d'autres) — géré par la logique
+      métier du nouveau RPC plutôt que par la contrainte.
+    - **Nouveau RPC `delete_my_account()`** (`SECURITY DEFINER`, même schéma que
+      `join_family_by_code`/`get_family_allergies` : `EXECUTE` révoqué à `public`/`anon`,
+      accordé à `authenticated` seulement) : pour chaque famille dont l'appelant est
+      propriétaire, transfère la propriété à un autre membre réel (priorité à un admin
+      existant, sinon le membre le plus ancien — promu admin au passage) s'il y en a un,
+      sinon supprime la famille entière (l'appelant en est alors l'unique membre réel) ;
+      retire ensuite l'appelant de toutes ses appartenances `family_members` (même
+      sémantique que « quitter la famille ») ; supprime enfin **`auth.users`** directement
+      (pas seulement `profiles`) — `profiles_profile_id_fkey` est déjà en `CASCADE` vers
+      `auth.users`, donc tout le reste (mcp_tokens, profile_diets,
+      profile_food_restrictions, week_templates.profile_id, recettes privées/familiales
+      possédées) suit automatiquement une fois les FK ci-dessus corrigées.
+    - **Effet de bord connu et assumé** : une recette `scope='family'` créée par
+      l'utilisateur qui se supprime est elle-même supprimée (`recipes.owner_profile_id`
+      est en `CASCADE`, comportement préexistant non modifié ici) même si elle est encore
+      utilisée dans le planning d'autres membres — contrairement aux
+      `meal_plans`/`meal_plan_meals` (données réellement collectives, non « possédées »
+      par un seul créateur) qui survivent intacts avec juste leur référence d'auteur
+      mise à `null`. Pas corrigé ici : redesigner la propriété des recettes familiales
+      (multi-contributeur plutôt que possédées par un seul `owner_profile_id`) est un
+      chantier à part, hors scope d'une correction du mécanisme de suppression.
+    - **`AuthService.deleteAccount`** appelle désormais `sb.rpc("delete_my_account")` au
+      lieu du `DELETE` direct et retourne `{error}` (même convention que
+      `resetPassword`) ; `handleDeleteAccount` (`src/App.tsx`) devient asynchrone et
+      affiche un toast d'erreur (`showToast(..., "clay")`, même pattern que tous les
+      autres handlers) si le RPC échoue, au lieu d'échouer silencieusement comme avant.
+    - **Vérifié directement en base** (comptes 100% jetables créés/détruits par le test
+      lui-même, `execute_sql` + `SET LOCAL role authenticated`/`request.jwt.claims` —
+      `npm run test:rls` non exécutable dans cette session distante, credentials
+      absents, comme pour les sessions précédentes) : (1) utilisateur seul propriétaire
+      de sa famille avec recette privée/meal_plan/modèle → tout disparaît (`auth.users`,
+      `profiles`, `families`, `family_members`, `recipes`, `meal_plans`,
+      `week_templates`, comptés à 0 partout après) ; (2) utilisateur copropriétaire
+      d'une famille à 2 membres réels avec une recette privée et une recette `family`
+      créées par lui, plus un meal_plan partagé → après suppression, la famille et le
+      meal_plan survivent (`owner_profile_id` transféré au second membre, promu admin ;
+      `meal_plans.created_by` passé à `null`), la recette privée **et** la recette
+      familiale de l'utilisateur disparaissent (effet de bord documenté ci-dessus) ; le
+      second utilisateur (devenu seul membre réel) a ensuite été supprimé à son tour
+      pour nettoyer entièrement les fixtures de test — 0 trace résiduelle confirmée par
+      requête. Advisors de sécurité Supabase revérifiés après la migration :
+      `delete_my_account` n'apparaît que dans la même classe d'avertissement
+      pré-existante et acceptée pour tous les RPC `SECURITY DEFINER` du projet
+      (`authenticated_security_definer_function_executable`), absent de la liste `anon`
+      (confirme que le `revoke` a fonctionné). `npm run build`/`typecheck` en parité
+      stricte (2062 erreurs contre 2063 avant — un paramètre `userId` devenu inutile a
+      été retiré de la signature de `deleteAccount` plutôt que préfixé `_`). Check
+      équivalent ajouté à `scripts/test-rls.mjs` (compte jetable créé via `signUp()`
+      avec session immédiate — confirmation email désactivée pour ce projet, voir plus
+      bas — puis auto-supprimé par le test, vérifié par une tentative de reconnexion qui
+      doit échouer) pour que `npm run test:rls` le rejoue côté utilisateur (34 checks au
+      total, +2).
 
 ## Bugs connus, non corrigés
 
